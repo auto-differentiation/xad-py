@@ -87,3 +87,8 @@ with xadj.Tape() as tape:
 ```
 
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
+
+## Related Projects
+
+- XAD Comprehensive automatic differentiation in [Python](https://github.com/auto-differentiation/xad-py) and [C++](https://github.com/auto-differentiation/xad)
+- QuantLib-Risks: Fast risk evaluations in [Python](https://github.com/auto-differentiation/QuantLib-Risks-Py) and [C++](https://github.com/auto-differentiation/QuantLib-Risks-Cpp)

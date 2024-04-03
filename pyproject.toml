@@ -29,7 +29,7 @@ description = "High-Performance Automatic Differentiation for Python"
 authors = ["Auto Differentiation Dev Team <dev@auto-differentiation.com>"]
 readme = "README.md"
 homepage = "https://auto-differentiation.github.io"
-repository = "https://github.com/auto-differentiation/xad"
+repository = "https://github.com/auto-differentiation/xad-py"
 documentation = "https://auto-differentiation.github.io/tutorials/python"
 keywords = [
     "automatic-differentiation",
