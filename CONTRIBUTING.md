@@ -1,0 +1,128 @@
+# How to contribute
+
+We love pull requests from everyone. By participating in this project, you agree to abide
+by our [code of conduct](CODE_OF_CONDUCT.md).
+
+1.  Fork, then clone the repository:
+
+```bash
+git clone https://github.com/yourusername/xad-py.git
+```
+
+2.  Follow the [Build Instructions](README.md) to setup the dependencies and
+    build the software. Make sure all tests pass.
+
+3.  Create a feature branch, typically based on master, for your change
+
+```bash
+git checkout -b feature/my-change main
+```
+
+4.  Make your changes, adding tests as you go, and commit. Again, make sure all
+    tests pass.
+
+5.  Push your fork
+
+6.  [Submit a pull request][pr]. Not that you will have to sign the [Contributor License Agreement][cla]
+    before the PR can be merged.
+
+At this point, you are depending on the core team to review your request.
+We may suggest changes, improvements, or alternatives.
+We strive to at least comment on a pull request within 3 business days.
+After feedback has been given, we expect a response within 2 weeks,
+after which we may close the pull request if it isn't showing activity.
+
+Some things that will highly increase the chance that your pull request gets
+accepted:
+
+-   Discuss the change you wish to make via issue or email
+
+-   Write good tests for all added features
+
+-   Follow our [coding style](#coding-style)
+
+-   Write good commit messages (short one-liner, followed by a blank line,
+    followed by a more detailed explanation)
+
+## Source Code Organisation
+
+-   [src](src): The Pybind11-based C++ sources of the Python bindings (_xad package)
+-   [xad](xad): Python package wrapper around the generated Pybind11 bindings.
+-   [samples](samples): Example usages
+-   [tests](tests): Unit tests
+
+
+## Buildin from Source
+
+This package is using [Poetry](https://python-poetry.org/) in conjunction with [CMake](https://cmake.org/), to build [Pybind11](https://pybind11.readthedocs.io/en/stable/) wrappers for XAD.
+You can get started by first installing Poetry, and then running:
+
+```text
+poetry install
+```
+
+The tests can be run as `poetry run pytest`.
+
+A wheel can be built using `poetry build`.
+
+Please see the Poetry documentation for more details.
+
+## Coding Style
+
+The following is for the C++ part of this code-base - the Python code follows standard
+Python best practices.
+For convenience, there is a `.clang-format` file in the root of the project which you can (and should) use.
+
+-   **Use Common Sense** - Deviations from these guidelines are explicitly allowed, if they make
+    sense in the context of their use.
+
+-   General
+    -   Insert a copyright / license note, including short paragraph of the file's
+        purpose, into every source file (look at existing ones for an example)
+
+    -   Use a maximum of 100 characters per source line
+
+-   Naming
+    -   Names representing types must be mixed case, starting with upper case `CheckpointCallback`
+    -   Variables must be mixed case, starting with lower case `currentRecording`
+    -   Named constants must be all upper case, separated by underscores `DEFAULT_LENGTH`
+    -   Method and function names must be mixed case, starting with lower case, and must be verbs `pushLhs`
+    -   Namespace names must be all lower case `xad`
+    -   Template parameters should be single character capitals, or named like types `T`, `Scalar`
+    -   Private class members should have an underscore suffix `length_`
+    -   All names should be written in English
+    -   The name of the object should be avoided in the method name `Line::getLength()`, _not_ `Line::getLineLength()`
+
+-   Includes
+    -   Use `#pragma once` instead of include guards
+
+    -   Group includes by libraries, starting with local includes, continuing with third party libraries,
+        and finishing with C++ and C standard libraries
+
+    -   Use `<>` to include globally valid files (including public includes of the current project)
+
+    -   Use `""` to include files relative to the current directory
+
+    -   Includes should only exist on top of the files
+
+-   Comments
+    -   Use `//` for comments, and `/*` for disabling large sections of code for debugging
+
+    -   Avoid too many comments within the body of functions - code should be
+        self-explanatory
+
+    -   Do comment the functions / methods if their use is not obvious
+
+    -   Use `TODO` inside a comment to flag tasks to attend to in near future
+
+-   Indents, Spacing, Line breaks
+    -   Use 4 space to introduce a new scope
+    -   Never use tabs
+    -   Don't indent namespace scopes
+    -   Break before the curly brace in a function definition
+    -   Line breaks before curly braces in other contexts are optional
+    -   Short loops or functions can be defined in one line
+
+[pr]: https://github.com/auto-differentiation/xad-py/compare/
+
+[cla]: https://gist.github.com/auto-differentiation-dev/4a5c0cf1fbfed7be64308d1c2f47bd25
