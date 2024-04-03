@@ -121,4 +121,3 @@ test-command = "pytest {project}/tests"
 test-requires = ["pytest"]
 test-skip = ["*universal2:arm64"]
 build-verbosity = 2
-before-test-linux = "rm -rf /project/xad"  # make sure this source dir really isn't used in imports
