@@ -143,11 +143,14 @@ import xad
 import math as _math
 
 
-def hypot(inputs: List[Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]]):
+def hypot(*inputs: Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]):
     return sqrt(sum(pow(x, 2) for x in inputs))
 
 
-def dist(p: List[Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]], q):
+def dist(
+    p: List[Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]],
+    q: List[Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]],
+):
     return sqrt(sum(pow(px - qx, 2) for px, qx in zip(p, q)))
 
 

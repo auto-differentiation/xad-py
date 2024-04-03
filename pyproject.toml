@@ -110,12 +110,6 @@ target-version = ["py38", "py39", "py310", "py311", "py312"]
 module = ["ninja"]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-minversion = "6.0"
-addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
-xfail_strict = true
-testpaths = ["tests"]
-
 [tool.cibuildwheel]
 test-command = "pytest {project}/tests"
 test-requires = ["pytest"]
