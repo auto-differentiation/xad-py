@@ -68,19 +68,18 @@ def get_vsvars_environment(architecture="amd64", toolset="14.3"):
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Community edition
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Build tools
     ]:
-        if os.path.isfile(vcvarsall):
-            string = f'("{vcvarsall}" {architecture} -vcvars_ver={toolset}>nul)&&"{python}" -c "import os; print(repr(os.environ))"'
-            print("running command:\n", string)
-            process = subprocess.Popen(
-                string,
-                stdout=subprocess.PIPE,
-                shell=True,
-            )
-            stdout, _ = process.communicate()
-            exitcode = process.wait()
-            if exitcode == 0:
-                result = eval(stdout.decode("ascii").strip("environ"))
-                break
+        string = f'("{vcvarsall}" {architecture} -vcvars_ver={toolset}>nul)&&"{python}" -c "import os; print(repr(os.environ))"'
+        print("running command:\n", string)
+        process = subprocess.Popen(
+            string,
+            stdout=subprocess.PIPE,
+            shell=True,
+        )
+        stdout, _ = process.communicate()
+        exitcode = process.wait()
+        if exitcode == 0:
+            result = eval(stdout.decode("ascii").strip("environ"))
+            break
     if not result:
         raise Exception("Couldn't find/process vcvarsall batch file")
     print(f"result is\n {result}")
