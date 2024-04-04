@@ -41,15 +41,6 @@ except ImportError:
     from distutils.extension import Extension as _Extension  # type: ignore[assignment]
 
 
-# Convert distutils Windows platform specifiers to CMake -A arguments
-PLAT_TO_CMAKE = {
-    "win32": "Win32",
-    "win-amd64": "x64",
-    "win-arm32": "ARM",
-    "win-arm64": "ARM64",
-}
-
-
 def get_vsvars_environment(architecture="amd64", toolset="14.3"):
     """Returns a dictionary containing the environment variables set up by vsvarsall.bat
     architecture - Architecture to pass to vcvarsall.bat. Normally "x86" or "amd64"

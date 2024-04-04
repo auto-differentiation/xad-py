@@ -25,6 +25,7 @@
 if(MSVC)
   option(XAD_STATIC_MSVC_RUNTIME "Use static runtime" ON)
 endif()
+option(XAD_NO_THREADLOCAL "Use thread-local tape" ON)
 
 find_package(Threads REQUIRED)
 
@@ -48,6 +49,7 @@ pybind11_add_module(
 target_include_directories(_xad PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/xad/src
                                         xad/src)
 set_target_properties(_xad PROPERTIES CXX_STANDARD 17)
+target_link_libraries(_xad PRIVATE Threads::Threads)
 if(MSVC)
   target_compile_options(_xad PRIVATE -nologo -utf-8 "/arch:AVX")
   target_compile_definitions(
