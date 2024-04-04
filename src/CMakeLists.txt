@@ -26,16 +26,47 @@ if(MSVC)
   option(XAD_STATIC_MSVC_RUNTIME "Use static runtime" ON)
 endif()
 
+find_package(Threads REQUIRED)
+
 add_subdirectory(pybind11)
 add_subdirectory(xad)
 
-pybind11_add_module(_xad module.cpp math.hpp tape.hpp real.hpp exceptions.hpp)
-target_link_libraries(_xad PRIVATE XAD::xad)
-target_compile_definitions(_xad PRIVATE VERSION_INFO=${PROJECT_VERSION})
+# Note: We bake XAD directly into this module, rather than linking, since
+# otherwise we get conflicting definitions of the types when used in
+# QuantLib-Risks-Py which causes a segfault We assume a platform that at least
+# supports the AVX instructions set
 
+pybind11_add_module(
+  _xad
+  module.cpp
+  math.hpp
+  tape.hpp
+  real.hpp
+  exceptions.hpp
+  xad/src/Tape.cpp)
+
+target_include_directories(_xad PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/xad/src
+                                        xad/src)
+set_target_properties(_xad PROPERTIES CXX_STANDARD 17)
 if(MSVC)
-  # to allow using M_PI and the like
-  target_compile_definitions(_xad PRIVATE _USE_MATH_DEFINES)
+  target_compile_options(_xad PRIVATE -nologo -utf-8 "/arch:AVX")
+  target_compile_definitions(
+    _xad
+    PRIVATE VERSION_INFO=${PROJECT_VERSION}
+            _UNICODE
+            UNICODE
+            WIN32_LEAN_AND_MEAN
+            WIN32
+            _WIN32
+            _USE_MATH_DEFINES)
+  # static MSVC runtime to avoid linking issues in Python and QuantLib-Risks
   set_target_properties(_xad PROPERTIES MSVC_RUNTIME_LIBRARY
                                         "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  target_compile_options(_xad PRIVATE -mavx -stdlib=libc++
+                                      -mmacosx-version-min=10.9)
+  target_compile_definitions(_xad PRIVATE VERSION_INFO=${PROJECT_VERSION})
+else()
+  target_compile_options(_xad PRIVATE -mavx)
+  target_compile_definitions(_xad PRIVATE VERSION_INFO=${PROJECT_VERSION})
 endif()

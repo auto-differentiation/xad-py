@@ -24,7 +24,7 @@
 
 [tool.poetry]
 name = "xad"
-version = "1.5.1"
+version = "1.5.1.1"
 description = "High-Performance Automatic Differentiation for Python"
 authors = ["Auto Differentiation Dev Team <dev@auto-differentiation.com>"]
 readme = "README.md"
@@ -101,6 +101,10 @@ requires = [
     "pybind11-stubgen>=2.5"
 ]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
 
 [tool.black]
 line-length = 100
