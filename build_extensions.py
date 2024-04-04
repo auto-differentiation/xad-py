@@ -69,8 +69,10 @@ def get_vsvars_environment(architecture="amd64", toolset="14.3"):
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Build tools
     ]:
         if os.path.isfile(vcvarsall):
+            string = f'("{vcvarsall}" {architecture} -vcvars_ver={toolset}>nul)&&"{python}" -c "import os; print(repr(os.environ))"'
+            print("running command:\n", string)
             process = subprocess.Popen(
-                f'("{vcvarsall}" {architecture} -vcvars_ver={toolset}>nul)&&"{python}" -c "import os; print(repr(os.environ))"',
+                string,
                 stdout=subprocess.PIPE,
                 shell=True,
             )
