@@ -50,6 +50,41 @@ PLAT_TO_CMAKE = {
 }
 
 
+def get_vsvars_environment(architecture="amd64", toolset="14.3"):
+    """Returns a dictionary containing the environment variables set up by vsvarsall.bat
+    architecture - Architecture to pass to vcvarsall.bat. Normally "x86" or "amd64"
+    win32-specific
+    """
+    result = None
+    python = sys.executable
+
+    for vcvarsall in [
+        "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat"  # VS2022 Enterprise
+        "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2022 Pro
+        "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2022 Community edition
+        "C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2022 Build Tools
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Enterprise
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Pro
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Community edition
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat",  # VS2019 Build tools
+    ]:
+        if os.path.isfile(vcvarsall):
+            process = subprocess.Popen(
+                f'("{vcvarsall}" {architecture} -vcvars_ver={toolset}>nul)&&"{python}" -c "import os; print(repr(os.environ))"',
+                stdout=subprocess.PIPE,
+                shell=True,
+            )
+            stdout, _ = process.communicate()
+            exitcode = process.wait()
+            if exitcode == 0:
+                result = eval(stdout.decode("ascii").strip("environ"))
+                break
+    if not result:
+        raise Exception("Couldn't find/process vcvarsall batch file")
+    print(f"result is\n {result}")
+    return result
+
+
 # A CMakeExtension needs a sourcedir instead of a file list.
 # The name must be the _single_ output extension from the CMake build.
 # If you need multiple extensions, see scikit-build.
@@ -89,36 +124,17 @@ class CMakeBuild(_build_ext):
         if "CMAKE_ARGS" in os.environ:
             cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
 
-        if self.compiler.compiler_type != "msvc":
-            # Using Ninja-build
-            if not cmake_generator or cmake_generator == "Ninja":
-                import ninja
+        env = get_vsvars_environment() if self.compiler.compiler_type == "msvc" else None
 
-                ninja_executable_path = Path(ninja.BIN_DIR) / "ninja"
-                cmake_args += [
-                    "-GNinja",
-                    f"-DCMAKE_MAKE_PROGRAM:FILEPATH={ninja_executable_path}",
-                ]
-        else:
-            # Single config generators are handled "normally"
-            single_config = any(x in cmake_generator for x in {"NMake", "Ninja"})
+        # Using Ninja-build
+        if not cmake_generator or cmake_generator == "Ninja":
+            import ninja
 
-            # CMake allows an arch-in-generator style for backward compatibility
-            contains_arch = any(x in cmake_generator for x in {"ARM", "Win64"})
-
-            # Specify the arch if using MSVC generator, but only if it doesn't
-            # contain a backward-compatibility arch spec already in the
-            # generator name.
-            if not single_config and not contains_arch:
-                cmake_args += ["-A", PLAT_TO_CMAKE[self.plat_name]]
-
-            # Multi-config generators have a different way to specify configs
-            if not single_config:
-                cmake_args += [
-                    f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}"
-                ]
-                build_args += ["--config", cfg]
-
+            ninja_executable_path = Path(ninja.BIN_DIR) / "ninja"
+            cmake_args += [
+                "-GNinja",
+                f"-DCMAKE_MAKE_PROGRAM:FILEPATH={ninja_executable_path}",
+            ]
 
         if sys.platform.startswith("darwin"):
             # Cross-compile support for macOS - respect ARCHFLAGS if set
@@ -139,15 +155,12 @@ class CMakeBuild(_build_ext):
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
 
-        subprocess.run(
-            ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True
-        )
-        subprocess.run(
-            ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
-        )
+        subprocess.run(["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True, env=env)
+        subprocess.run(["cmake", "--build", ".", *build_args], cwd=build_temp, check=True, env=env)
 
         # generate stubs
         import pybind11_stubgen
+
         save_args = sys.argv
         save_dir = os.getcwd()
         save_path = sys.path
@@ -158,6 +171,7 @@ class CMakeBuild(_build_ext):
         os.chdir(save_dir)
         sys.argv = save_args
         sys.path = save_path
+
 
 def build(setup_kwargs: dict):
     """Main extension build command."""
