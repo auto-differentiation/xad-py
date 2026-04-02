@@ -1,5 +1,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/xad.svg)](https://auto-differentiation.github.io/tutorials/python)
 
+> Part of the [XAD ecosystem](https://github.com/auto-differentiation) — the fastest automatic differentiation library for C++.
+> If this is useful to you, please star the [core XAD repository](https://github.com/auto-differentiation/xad).
 
 XAD is a library designed for
 [automatic differentiation](https://auto-differentiation.github.io/tutorials/aad/),
