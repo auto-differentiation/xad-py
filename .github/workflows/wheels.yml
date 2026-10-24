@@ -52,7 +52,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.1
+        uses: pypa/cibuildwheel@v4.3.3
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
