@@ -52,11 +52,11 @@ coverage.xml
 cover/
 
 # build products
-*.pyi
+/xad/_xad/
 _xad*.so
 _xad*.pyd
 /build
 *.egg-info
 wheelhouse
-/setup.py
 /.mypy_cache/
+/.venv/

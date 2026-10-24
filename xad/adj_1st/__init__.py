@@ -33,7 +33,7 @@ def _register_inputs(self, inputs):
         self.registerInput(i)
 
 
-Tape.registerInputs = _register_inputs
+setattr(Tape, "registerInputs", _register_inputs)
 
 
 def _register_outputs(self, outputs):
@@ -41,7 +41,7 @@ def _register_outputs(self, outputs):
         self.registerOutput(o)
 
 
-Tape.registerOutputs = _register_outputs
+setattr(Tape, "registerOutputs", _register_outputs)
 
 setattr(Real, "value", property(Real.getValue, doc="get the underlying float value of the object"))
 setattr(
@@ -56,10 +56,10 @@ setattr(
 # additional methods inserted on the python side
 def _as_integer_ratio(x: Real) -> Tuple[int, int]:
     """Returns a rational representation of the float with numerator and denominator in a tuple"""
-    return x.value.as_integer_ratio()
+    return x.getValue().as_integer_ratio()
 
 
-Real.as_integer_ratio = _as_integer_ratio
+setattr(Real, "as_integer_ratio", _as_integer_ratio)
 
 
 def _fromhex(cls: Type[Real], hexstr: str) -> Real:
@@ -67,39 +67,39 @@ def _fromhex(cls: Type[Real], hexstr: str) -> Real:
     return cls(float.fromhex(hexstr))
 
 
-Real.fromhex = classmethod(_fromhex)
+setattr(Real, "fromhex", classmethod(_fromhex))
 
 
 def _getnewargs(x: Real) -> Tuple[float]:
-    return (x.value,)
+    return (x.getValue(),)
 
 
-Real.__getnewargs__ = _getnewargs
+setattr(Real, "__getnewargs__", _getnewargs)
 
 
 def _hash(x: Real) -> int:
-    return hash(x.value)
+    return hash(x.getValue())
 
 
-Real.__hash__ = _hash
+setattr(Real, "__hash__", _hash)
 
 
 def _hex(x: Real) -> str:
-    return x.value.hex()
+    return x.getValue().hex()
 
 
-Real.hex = _hex
+setattr(Real, "hex", _hex)
 
 
 def _is_integer(x: Real) -> bool:
-    return x.value.is_integer()
+    return x.getValue().is_integer()
 
 
-Real.is_integer = _is_integer
+setattr(Real, "is_integer", _is_integer)
 
 
-def _format(x: object, spec: str) -> str:
-    return format(x.value, spec)
+def _format(x: Real, spec: str) -> str:
+    return format(x.getValue(), spec)
 
 
-Real.__format__ = _format
+setattr(Real, "__format__", _format)

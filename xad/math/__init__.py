@@ -23,9 +23,9 @@
 ##############################################################################
 
 """XAD math module - mimics the standard math module, but allows using XAD active types
-   as arguments. Note that it's also possible to call the functions contained with
-   float arguments (passive type), to allow seamless integration with active and passive
-   data types.
+as arguments. Note that it's also possible to call the functions contained with
+float arguments (passive type), to allow seamless integration with active and passive
+data types.
 """
 
 from typing import Union, List
@@ -77,7 +77,6 @@ from xad._xad.math import (
     copysign,
     trunc,
 )
-
 
 __all__ = [
     "sqrt",
@@ -151,7 +150,7 @@ def dist(
     p: List[Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]],
     q: List[Union["xad.adj_1st.Real", "xad.fwd_1st.Real", float, int]],
 ):
-    return sqrt(sum(pow(px - qx, 2) for px, qx in zip(p, q)))
+    return sqrt(sum(pow(px - qx, 2) for px, qx in zip(p, q)))  # type: ignore[operator]
 
 
 def isclose(a, b, *args, **kwargs):

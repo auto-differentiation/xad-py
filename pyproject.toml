@@ -1,6 +1,6 @@
 ##############################################################################
 #
-#  Python bindings for XAD - poetry-based setup file
+#  Python bindings for XAD - package and build configuration
 #
 #  This file is part of XAD's Python bindings, a comprehensive library for
 #  automatic differentiation.
@@ -22,15 +22,20 @@
 #
 ##############################################################################
 
-[tool.poetry]
+[build-system]
+requires = ["scikit-build-core>=0.11", "pybind11-stubgen>=2.5"]
+build-backend = "scikit_build_core.build"
+
+[project]
 name = "xad"
 version = "1.5.1.3"
 description = "High-Performance Automatic Differentiation for Python"
-authors = ["Auto Differentiation Dev Team <dev@auto-differentiation.com>"]
 readme = "README.md"
-homepage = "https://auto-differentiation.github.io"
-repository = "https://github.com/auto-differentiation/xad-py"
-documentation = "https://auto-differentiation.github.io/tutorials/python"
+requires-python = ">=3.8.1"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "Auto Differentiation Dev Team", email = "dev@auto-differentiation.com" },
+]
 keywords = [
     "automatic-differentiation",
     "derivatives",
@@ -62,45 +67,52 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Scientific/Engineering",
-    "Topic :: Software Development"
+    "Topic :: Software Development",
+    "Typing :: Typed"
 ]
-license = "AGPL-3.0-or-later"
-include = ["xad/_xad.*", "xad/**/*.pyi"]
 
-[tool.poetry.urls]
+[project.urls]
+Homepage = "https://auto-differentiation.github.io"
+Repository = "https://github.com/auto-differentiation/xad-py"
+Documentation = "https://auto-differentiation.github.io/tutorials/python"
 Download = "https://pypi.org/project/xad/#files"
 Tracker = "https://github.com/auto-differentiation/xad-py/issues"
 "Release notes" = "https://github.com/auto-differentiation/xad-py/releases"
 
-[tool.poetry.build]
-script = "build_extensions.py"
-generate-setup-file = true
+[dependency-groups]
+test = ["pytest"]
+lint = ["black==26.10.1", "flake8==7.4.1", "mypy==2.4.0"]
+dev = [{ include-group = "test" }, { include-group = "lint" }, "pre-commit"]
 
-[tool.poetry.dependencies]
-python= ">=3.8.1,<4.0"
-
-[tool.poetry.group.dev.dependencies]
-mypy = "*"
-black = "*"
-flake8 = "*"
-pytest = "*"
-pre-commit = "*"
-ninja = "*"
-cmake = "*"
-pybind11-stubgen = "^2.5"
-
-
-[build-system]
-requires = [
-    "poetry-core>=1.0.0",
-    "ninja",
-    "cmake",
-    "setuptools>=42",
-    "pybind11-stubgen>=2.5"
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.18"
+wheel.packages = ["xad"]
+# submodule parts not needed to build
+sdist.exclude = [
+    ".github",
+    "src/xad/bindings",
+    "src/xad/docs",
+    "src/xad/samples",
+    "src/xad/test",
+    "src/pybind11/docs",
+    "src/pybind11/tests",
 ]
-build-backend = "poetry.core.masonry.api"
+
+[tool.cibuildwheel]
+archs = ["native"]  # one arch per runner
+skip = ["cp3??t-*"]  # no free-threaded builds
+build-verbosity = 2
+test-groups = ["test"]
+test-command = "pytest {project}/tests"
+
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -109,13 +121,3 @@ testpaths = ["tests"]
 [tool.black]
 line-length = 100
 target-version = ["py38", "py39", "py310", "py311", "py312"]
-
-[[tool.mypy.overrides]]
-module = ["ninja"]
-ignore_missing_imports = true
-
-[tool.cibuildwheel]
-test-command = "pytest {project}/tests"
-test-requires = ["pytest"]
-test-skip = ["*universal2:arm64"]
-build-verbosity = 2
