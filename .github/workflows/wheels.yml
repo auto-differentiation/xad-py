@@ -10,6 +10,7 @@
 # - publish to Test PyPI worked (with all build conditions above)
 # - and if it's a version tag (starting with v*)
 #
+# cibuildwheel settings live in [tool.cibuildwheel] in pyproject.toml.
 
 name: Python Wheels
 on:
@@ -28,50 +29,56 @@ permissions:
 
 jobs:
   build_wheels:
-    name: Wheels
+    name: Wheels ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        buildplat: ["manylinux_x86_64", "musllinux_x86_64", "macosx_x86_64", "win_amd64"]
-        python: ["cp38", "cp39", "cp310", "cp311", "cp312"]
         include:
-          - buildplat: "manylinux_x86_64"
-            os: ubuntu-20.04
-            python_exe: "$(which python)"
-          - buildplat: "musllinux_x86_64"
-            os: ubuntu-20.04
-            python_exe: "$(which python)"
-          - buildplat: "macosx_x86_64"
-            os: "macos-12"
-            python_exe: "$(which python)"
-          - buildplat: "win_amd64"
+          - name: linux-x86_64
+            os: ubuntu-24.04
+          - name: linux-aarch64
+            os: ubuntu-24.04-arm
+          - name: macos-x86_64
+            os: macos-15-intel
+          - name: macos-arm64
+            os: macos-15
+          - name: windows-amd64
             os: windows-2022
-            python_exe: "python"
-        exclude:
-          # gives "is not a supported wheel on this platform" for some reason
-          - buildplat: "macosx_x86_64"
-            python: "cp38"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
+          persist-credentials: false
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
-        env:
-          CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat }}
-          CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel}"
+        uses: pypa/cibuildwheel@v3.4.1
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: cibw-wheels-${{ matrix.python }}-${{ matrix.buildplat }}
+          name: cibw-wheels-${{ matrix.name }}
           path: ./wheelhouse/*.whl
           if-no-files-found: error
 
+  build_sdist:
+    name: SDist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build sdist
+        run: pipx run build --sdist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v7
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   test-publish:
-    needs: build_wheels
+    needs: [build_wheels, build_sdist]
     if: >-
       github.repository == 'auto-differentiation/xad-py' &&
       (github.event_name == 'workflow_dispatch' ||
@@ -83,12 +90,12 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: cibw-*
           path: dist
           merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@v1.8.12
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
         name: Publish on Test PyPI
         with:
           verbose: true
@@ -105,12 +112,12 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: cibw-*
           path: dist
           merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@v1.8.12
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
         name: Publish on PyPI
         with:
           verbose: true
