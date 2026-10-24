@@ -46,6 +46,8 @@ Install:
 pip install xad
 ```
 
+Supports Python 3.10 to 3.14. The package version follows the
+[XAD C++ core](https://github.com/auto-differentiation/xad) it is built on.
 
 Calculate first-order derivatives in adjoint mode:
 
