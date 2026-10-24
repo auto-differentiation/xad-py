@@ -1,6 +1,6 @@
 # ##############################################################################
 #
-# Python bindings for XAD - CMake file called during poetry build.
+# Python bindings for XAD - CMake file called by scikit-build-core.
 #
 # This file is part of XAD's Python bindings, a comprehensive library for
 # automatic differentiation.
@@ -22,7 +22,7 @@
 #
 # ##############################################################################
 
-cmake_minimum_required(VERSION 3.15.2)
+cmake_minimum_required(VERSION 3.18)
 cmake_policy(SET CMP0092 NEW) # don't set warning flags by default in Windows
 
 project(
@@ -30,9 +30,6 @@ project(
   LANGUAGES CXX
   DESCRIPTION "Python bindings for the XAD automatic differentiation library"
   HOMEPAGE_URL "https://auto-differentiation.github.io")
-
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/src/xad/cmake)
-include(SetupVersion)
 
 set(CMAKE_CXX_STANDARD 17)
 

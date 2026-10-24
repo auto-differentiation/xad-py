@@ -52,20 +52,41 @@ accepted:
 -   [tests](tests): Unit tests
 
 
-## Buildin from Source
+## Building from Source
 
-This package is using [Poetry](https://python-poetry.org/) in conjunction with [CMake](https://cmake.org/), to build [Pybind11](https://pybind11.readthedocs.io/en/stable/) wrappers for XAD.
-You can get started by first installing Poetry, and then running:
+The package is built with [scikit-build-core](https://scikit-build-core.readthedocs.io/),
+which drives [CMake](https://cmake.org/) to build the [Pybind11](https://pybind11.readthedocs.io/en/stable/)
+wrappers for XAD. XAD and Pybind11 are git submodules, so clone recursively
+(or run `git submodule update --init --recursive`).
+A C++17 compiler is required; CMake and Ninja are fetched automatically if missing.
+
+Install the package and the test dependencies into a virtual environment
+(the `--group` option needs pip 25.1 or later):
 
 ```text
-poetry install
+pip install . --group test
 ```
 
-The tests can be run as `poetry run pytest`.
+The tests should be run from outside the source tree, so that the installed package
+(which contains the compiled extension) is used rather than the `xad` source folder:
 
-A wheel can be built using `poetry build`.
+```text
+cd /tmp && python -m pytest /path/to/xad-py/tests
+```
 
-Please see the Poetry documentation for more details.
+The linters used in CI are in the `lint` dependency group (`dev` contains everything).
+mypy reads the extension's type stubs from the installed package:
+
+```text
+pip install . --group lint
+black --check xad
+flake8 xad
+mypy xad
+```
+
+A wheel and a source distribution can be built with `python -m build` (or `uv build`).
+Release wheels are built with [cibuildwheel](https://cibuildwheel.pypa.io/),
+configured in `[tool.cibuildwheel]` in `pyproject.toml`.
 
 ## Coding Style
 

@@ -26,16 +26,19 @@ if(MSVC)
   option(XAD_STATIC_MSVC_RUNTIME "Use static runtime" ON)
 endif()
 option(XAD_NO_THREADLOCAL "Use thread-local tape" ON)
+option(XAD_PY_STUBS "Generate type stubs with pybind11-stubgen" ON)
 
 find_package(Threads REQUIRED)
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+set(PYBIND11_FINDPYTHON ON)
 
 add_subdirectory(pybind11)
-add_subdirectory(xad)
+# Only used for XAD's generated headers, its own targets are not built
+add_subdirectory(xad EXCLUDE_FROM_ALL)
 
 # Note: We bake XAD directly into this module, rather than linking, since
 # otherwise we get conflicting definitions of the types when used in
-# QuantLib-Risks-Py which causes a segfault We assume a platform that at least
-# supports the AVX instructions set
+# QuantLib-Risks-Py which causes a segfault
 
 pybind11_add_module(
   _xad
@@ -50,25 +53,47 @@ target_include_directories(_xad PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/xad/src
                                         xad/src)
 set_target_properties(_xad PROPERTIES CXX_STANDARD 17)
 target_link_libraries(_xad PRIVATE Threads::Threads)
-if(MSVC)
-  target_compile_options(_xad PRIVATE -nologo -utf-8 "/arch:AVX")
+
+# Package version from pyproject.toml ("dev" otherwise)
+if(DEFINED SKBUILD_PROJECT_VERSION_FULL)
   target_compile_definitions(
-    _xad
-    PRIVATE VERSION_INFO=${PROJECT_VERSION}
-            _UNICODE
-            UNICODE
-            WIN32_LEAN_AND_MEAN
-            WIN32
-            _WIN32
-            _USE_MATH_DEFINES)
+    _xad PRIVATE VERSION_INFO=${SKBUILD_PROJECT_VERSION_FULL})
+endif()
+
+# AVX only when targeting x86_64
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles(
+  "#if !defined(__x86_64__) && !defined(_M_X64)
+#error not x86_64
+#endif
+int main() { return 0; }"
+  XAD_PY_TARGET_X86_64)
+
+if(MSVC)
+  target_compile_options(_xad PRIVATE -nologo -utf-8)
+  if(XAD_PY_TARGET_X86_64)
+    target_compile_options(_xad PRIVATE /arch:AVX)
+  endif()
+  target_compile_definitions(_xad PRIVATE _UNICODE UNICODE WIN32_LEAN_AND_MEAN
+                                          WIN32 _WIN32 _USE_MATH_DEFINES)
   # static MSVC runtime to avoid linking issues in Python and QuantLib-Risks
   set_target_properties(_xad PROPERTIES MSVC_RUNTIME_LIBRARY
                                         "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-  target_compile_options(_xad PRIVATE -mavx -stdlib=libc++
-                                      -mmacosx-version-min=10.9)
-  target_compile_definitions(_xad PRIVATE VERSION_INFO=${PROJECT_VERSION})
-else()
+elseif(XAD_PY_TARGET_X86_64)
   target_compile_options(_xad PRIVATE -mavx)
-  target_compile_definitions(_xad PRIVATE VERSION_INFO=${PROJECT_VERSION})
+endif()
+
+install(TARGETS _xad LIBRARY DESTINATION xad)
+
+# Stubs for the extension, installed as xad/_xad/*.pyi
+if(XAD_PY_STUBS)
+  set(stubs_dir ${CMAKE_CURRENT_BINARY_DIR}/stubs)
+  add_custom_command(
+    TARGET _xad
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${stubs_dir}
+    COMMAND ${Python_EXECUTABLE} -m pybind11_stubgen -o ${stubs_dir} _xad
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:_xad>
+    VERBATIM)
+  install(DIRECTORY ${stubs_dir}/_xad/ DESTINATION xad/_xad)
 endif()
