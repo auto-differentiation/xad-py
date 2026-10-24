@@ -105,7 +105,7 @@ sdist.exclude = [
 
 [tool.cibuildwheel]
 archs = ["native"]  # one arch per runner
-skip = ["cp3??t-*"]  # no free-threaded builds
+skip = ["cp3??t-*", "cp38-macosx_arm64"]  # no free-threaded; cp38 arm64 is cross-compiled (no stubgen)
 build-verbosity = 2
 test-groups = ["test"]
 test-command = "pytest {project}/tests"
