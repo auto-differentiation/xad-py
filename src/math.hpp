@@ -26,6 +26,7 @@
 
 #include <XAD/XAD.hpp>
 #include <pybind11/pybind11.h>
+#include "double_caster.hpp"
 #include <cmath>
 #include <numeric>
 

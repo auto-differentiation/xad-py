@@ -24,6 +24,7 @@
 
 #include <XAD/XAD.hpp>
 #include <pybind11/pybind11.h>
+#include "double_caster.hpp"  // first: must precede any double caster use
 #include "exceptions.hpp"
 #include "math.hpp"
 #include "real.hpp"

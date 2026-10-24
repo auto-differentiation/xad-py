@@ -28,6 +28,7 @@
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
+#include "double_caster.hpp"
 
 namespace py = pybind11;
 
@@ -89,6 +90,7 @@ void py_real(py::module_& m)
         .def(py::self > py::self)
         .def(py::self < py::self)
         .def("__int__", [](const T& d) { return int(d.getValue()); })
+        .def("__float__", [](const T& d) { return d.getValue(); })
         .def("__bool__", [](const T& d) { return bool(d); })
         .def("__neg__", [](const T& d) { return T(-d); })
         .def("__pos__", [](const T& d) { return d; })
@@ -181,7 +183,21 @@ void py_real(py::module_& m)
             "conjugate", [](const T& x) { return x; }, "complex conjugate")
         .def(
             "real", [](const T& x) { return x; }, "real part")
-        .def("imag", [](const T&) { return T(0.0); }, "imaginary part");
+        .def(
+            "imag", [](const T&) { return T(0.0); }, "imaginary part")
+        // pickle the value only: an unpickled adjoint Real is passive (not on tape)
+        .def(py::pickle([](const T& x) { return py::make_tuple(x.getValue()); },
+                        [](const py::tuple& t) { return T(t[0].cast<double>()); }))
+        // py::pickle needs protocol 2+: use that reduction for protocols 0/1 too
+        .def(
+            "__reduce_ex__",
+            [](const py::object& self, const py::object&)
+            {
+                return py::module_::import("builtins")
+                    .attr("object")
+                    .attr("__reduce_ex__")(self, 2);
+            },
+            py::arg("protocol"));
 
     add_extra_methods(c);
 }

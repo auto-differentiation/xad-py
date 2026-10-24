@@ -47,6 +47,7 @@ pybind11_add_module(
   tape.hpp
   real.hpp
   exceptions.hpp
+  double_caster.hpp
   xad/src/Tape.cpp)
 
 target_include_directories(_xad PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/xad/src
