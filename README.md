@@ -92,6 +92,24 @@ with xadj.Tape() as tape:
 
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
 
+## Building Extensions Against XAD
+
+The package ships XAD as a shared library, with its C++ headers and a CMake package config.
+C++ extension modules linking it share the active tape with `xad.adj_1st.Tape`
+(per thread):
+
+```cmake
+find_package(XAD CONFIG REQUIRED)
+target_link_libraries(my_ext PRIVATE XAD::xad)
+```
+
+```bash
+cmake -B build -DXAD_DIR=$(python -c "import xad; print(xad.get_cmake_dir())")
+```
+
+`xad.get_include()` and `xad.get_library_dir()` give the header and library directories.
+Import `xad` before the extension so the library is loaded.
+
 ## Related Projects
 
 - XAD Comprehensive automatic differentiation in [Python](https://github.com/auto-differentiation/xad-py) and [C++](https://github.com/auto-differentiation/xad)

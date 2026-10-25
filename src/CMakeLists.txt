@@ -22,10 +22,6 @@
 #
 # ##############################################################################
 
-if(MSVC)
-  option(XAD_STATIC_MSVC_RUNTIME "Use static runtime" ON)
-endif()
-option(XAD_NO_THREADLOCAL "Use thread-local tape" ON)
 option(XAD_PY_STUBS "Generate type stubs with pybind11-stubgen" ON)
 
 find_package(Threads REQUIRED)
@@ -33,12 +29,19 @@ find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 set(PYBIND11_FINDPYTHON ON)
 
 add_subdirectory(pybind11)
-# Only used for XAD's generated headers, its own targets are not built
-add_subdirectory(xad EXCLUDE_FROM_ALL)
 
-# Note: We bake XAD directly into this module, rather than linking, since
-# otherwise we get conflicting definitions of the types when used in
-# QuantLib-Risks-Py which causes a segfault
+# shared XAD, so extensions built against xad (get_cmake_dir()) use the same tape
+set(XAD_SHARED_LIBS ON)
+set(XAD_NO_THREADLOCAL OFF)
+set(XAD_STATIC_MSVC_RUNTIME OFF)
+set(XAD_WARNINGS_PARANOID OFF)
+set(CMAKE_INSTALL_INCLUDEDIR xad/include)
+add_subdirectory(xad EXCLUDE_FROM_ALL)
+if(WIN32)
+  # xad.dll next to _xad, also for importing it at build time (stubs)
+  set_target_properties(xad PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                       ${CMAKE_CURRENT_BINARY_DIR})
+endif()
 
 pybind11_add_module(
   _xad
@@ -47,13 +50,15 @@ pybind11_add_module(
   tape.hpp
   real.hpp
   exceptions.hpp
-  double_caster.hpp
-  xad/src/Tape.cpp)
+  double_caster.hpp)
 
-target_include_directories(_xad PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/xad/src
-                                        xad/src)
 set_target_properties(_xad PROPERTIES CXX_STANDARD 17)
-target_link_libraries(_xad PRIVATE Threads::Threads)
+target_link_libraries(_xad PRIVATE XAD::xad Threads::Threads)
+if(APPLE)
+  set_target_properties(_xad PROPERTIES INSTALL_RPATH "@loader_path/lib")
+elseif(UNIX)
+  set_target_properties(_xad PROPERTIES INSTALL_RPATH "$ORIGIN/lib")
+endif()
 
 # Package version from pyproject.toml ("dev" otherwise)
 if(DEFINED SKBUILD_PROJECT_VERSION_FULL)
@@ -77,14 +82,57 @@ if(MSVC)
   endif()
   target_compile_definitions(_xad PRIVATE _UNICODE UNICODE WIN32_LEAN_AND_MEAN
                                           WIN32 _WIN32 _USE_MATH_DEFINES)
-  # static MSVC runtime to avoid linking issues in Python and QuantLib-Risks
-  set_target_properties(_xad PROPERTIES MSVC_RUNTIME_LIBRARY
-                                        "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  set_target_properties(
+    _xad PROPERTIES MSVC_RUNTIME_LIBRARY
+                    "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 elseif(XAD_PY_TARGET_X86_64)
   target_compile_options(_xad PRIVATE -mavx)
 endif()
 
-install(TARGETS _xad LIBRARY DESTINATION xad)
+install(
+  TARGETS _xad
+  LIBRARY DESTINATION xad
+  COMPONENT python)
+
+# libxad, headers and a relocatable CMake config (XAD's install layout doesn't fit the wheel)
+set(xad_cmake_dir xad/share/cmake/XAD)
+install(
+  TARGETS xad
+  EXPORT XADPyTargets
+  RUNTIME DESTINATION xad COMPONENT python
+  LIBRARY DESTINATION xad/lib COMPONENT python
+  ARCHIVE DESTINATION xad/lib COMPONENT python)
+install(
+  EXPORT XADPyTargets
+  FILE XADTargets.cmake
+  NAMESPACE XAD::
+  DESTINATION ${xad_cmake_dir}
+  COMPONENT python)
+
+get_target_property(xad_src_dir xad SOURCE_DIR)
+get_target_property(xad_sources xad SOURCES)
+foreach(f IN LISTS xad_sources)
+  if(f MATCHES "\\.hpp$")
+    if(NOT IS_ABSOLUTE "${f}")
+      set(f "${xad_src_dir}/${f}")
+    endif()
+    install(
+      FILES ${f}
+      DESTINATION xad/include/XAD
+      COMPONENT python)
+  endif()
+endforeach()
+
+include(CMakePackageConfigHelpers)
+set(xad_gen_dir ${CMAKE_CURRENT_BINARY_DIR}/xad-config)
+configure_package_config_file(
+  xad/cmake/XADConfig.cmake.in ${xad_gen_dir}/XADConfig.cmake
+  INSTALL_DESTINATION ${xad_cmake_dir})
+install(
+  FILES ${xad_gen_dir}/XADConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/xad/src/generated/XADConfigVersion.cmake
+  DESTINATION ${xad_cmake_dir}
+  COMPONENT python)
 
 # Stubs for the extension, installed as xad/_xad/*.pyi
 if(XAD_PY_STUBS)
@@ -96,5 +144,8 @@ if(XAD_PY_STUBS)
     COMMAND ${Python_EXECUTABLE} -m pybind11_stubgen -o ${stubs_dir} _xad
     WORKING_DIRECTORY $<TARGET_FILE_DIR:_xad>
     VERBATIM)
-  install(DIRECTORY ${stubs_dir}/_xad/ DESTINATION xad/_xad)
+  install(
+    DIRECTORY ${stubs_dir}/_xad/
+    DESTINATION xad/_xad
+    COMPONENT python)
 endif()
