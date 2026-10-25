@@ -35,6 +35,19 @@ set(XAD_SHARED_LIBS ON)
 set(XAD_NO_THREADLOCAL OFF)
 set(XAD_STATIC_MSVC_RUNTIME OFF)
 set(XAD_WARNINGS_PARANOID OFF)
+# AVX only when targeting x86_64
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles(
+  "#if !defined(__x86_64__) && !defined(_M_X64)
+#error not x86_64
+#endif
+int main() { return 0; }"
+  XAD_PY_TARGET_X86_64)
+if(XAD_PY_TARGET_X86_64)
+  set(XAD_SIMD_OPTION AVX CACHE STRING "")
+else()
+  set(XAD_SIMD_OPTION NONE CACHE STRING "")
+endif()
 set(CMAKE_INSTALL_INCLUDEDIR xad/include)
 add_subdirectory(xad EXCLUDE_FROM_ALL)
 if(WIN32)
@@ -66,14 +79,6 @@ if(DEFINED SKBUILD_PROJECT_VERSION_FULL)
     _xad PRIVATE VERSION_INFO=${SKBUILD_PROJECT_VERSION_FULL})
 endif()
 
-# AVX only when targeting x86_64
-include(CheckCXXSourceCompiles)
-check_cxx_source_compiles(
-  "#if !defined(__x86_64__) && !defined(_M_X64)
-#error not x86_64
-#endif
-int main() { return 0; }"
-  XAD_PY_TARGET_X86_64)
 
 if(MSVC)
   target_compile_options(_xad PRIVATE -nologo -utf-8)

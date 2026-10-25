@@ -117,6 +117,10 @@ repair-wheel-command = "auditwheel repair --exclude libxad.so -w {dest_dir} {whe
 [tool.cibuildwheel.macos]
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} --exclude libxad.dylib -w {dest_dir} -v {wheel}"
 
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair --exclude xad.dll -w {dest_dir} {wheel}"
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
