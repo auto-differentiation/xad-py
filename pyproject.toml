@@ -76,6 +76,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://auto-differentiation.github.io"
 Repository = "https://github.com/auto-differentiation/xad-py"
+"XAD C++ library" = "https://github.com/auto-differentiation/xad"
 Documentation = "https://auto-differentiation.github.io/tutorials/python"
 Download = "https://pypi.org/project/xad/#files"
 Tracker = "https://github.com/auto-differentiation/xad-py/issues"
