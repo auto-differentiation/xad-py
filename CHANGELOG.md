@@ -8,7 +8,7 @@ The package version follows the [XAD](https://github.com/auto-differentiation/xa
 C++ core it is built on.
 
 
-## [2.2.0] - unreleased
+## [unreleased]
 
 ### Added
 
