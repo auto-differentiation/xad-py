@@ -23,9 +23,9 @@
 ##############################################################################
 
 from typing import Tuple, Type
-from xad._xad.adj_1st import Real, Tape
+from xad._xad.adj_1st import Complex, Real, Tape
 
-__all__ = ["Real", "Tape"]
+__all__ = ["Complex", "Real", "Tape"]
 
 
 def _register_inputs(self, inputs):

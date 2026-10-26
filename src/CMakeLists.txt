@@ -60,8 +60,10 @@ pybind11_add_module(
   _xad
   module.cpp
   math.hpp
+  cmath.hpp
   tape.hpp
   real.hpp
+  complex.hpp
   exceptions.hpp
   double_caster.hpp)
 

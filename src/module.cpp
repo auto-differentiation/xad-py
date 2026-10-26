@@ -25,6 +25,8 @@
 #include <XAD/XAD.hpp>
 #include <pybind11/pybind11.h>
 #include "double_caster.hpp"  // first: must precede any double caster use
+#include "cmath.hpp"
+#include "complex.hpp"
 #include "exceptions.hpp"
 #include "math.hpp"
 #include "real.hpp"
@@ -39,6 +41,7 @@ void py_adj_1st(py::module_ &m)
 {
     py::module_ adj = m.def_submodule("adj_1st");
     py_real<AReal>(adj);
+    py_complex<AReal>(adj);
     py_tape(adj);
 }
 
@@ -46,6 +49,7 @@ void py_fwd_1st(py::module_ &m)
 {
     py::module_ fwd = m.def_submodule("fwd_1st");
     py_real<FReal>(fwd);
+    py_complex<FReal>(fwd);
 }
 
 PYBIND11_MODULE(_xad, m)
@@ -53,6 +57,7 @@ PYBIND11_MODULE(_xad, m)
     py_adj_1st(m);
     py_fwd_1st(m);
     py_math(m);
+    py_cmath(m);
     py_exceptions(m);
 
 #ifdef VERSION_INFO

@@ -15,6 +15,9 @@ C++ core it is built on.
 - XAD as a shared library in the package, with headers and CMake config, for building
   extensions sharing the tape (`xad.get_include()`, `xad.get_cmake_dir()`,
   `xad.get_library_dir()`).
+- Complex numbers: `Complex` in `adj_1st` and `fwd_1st` with active real and imaginary parts,
+  operators with `Real`, float and `complex`, and `xad.cmath` mirroring `cmath`
+  ([#2](https://github.com/auto-differentiation/xad-py/issues/2)).
 
 ### Changed
 

@@ -90,6 +90,29 @@ with xadj.Tape() as tape:
     print(f"dy/dx3 = {x3_ad.derivative}")
 ```
 
+
+Complex numbers work the same way: `Complex` has active real and imaginary parts, and
+`xad.cmath` mirrors Python's `cmath` (see [samples/complex.py](samples/complex.py)):
+
+```python
+import xad.adj_1st as xadj
+import xad.cmath
+
+x, y = xadj.Real(0.5), xadj.Real(1.2)
+with xadj.Tape() as tape:
+    tape.registerInput(x)
+    tape.registerInput(y)
+    tape.newRecording()
+
+    z = xadj.Complex(x, y)
+    w = z * xad.cmath.exp(z)
+
+    tape.registerOutput(w.real)
+    w.real.derivative = 1.0
+    tape.computeAdjoints()
+    print(f"dRe(w)/dx = {x.derivative}, dRe(w)/dy = {y.derivative}")
+```
+
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
 
 ## Building Extensions Against XAD

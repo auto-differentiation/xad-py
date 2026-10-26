@@ -23,9 +23,9 @@
 ##############################################################################
 
 from typing import Tuple, Type
-from xad._xad.fwd_1st import Real
+from xad._xad.fwd_1st import Complex, Real
 
-__all__ = ["Real"]
+__all__ = ["Complex", "Real"]
 
 
 setattr(Real, "value", property(Real.getValue, doc="get the underlying float value of the object"))
