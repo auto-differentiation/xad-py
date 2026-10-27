@@ -43,7 +43,11 @@ def _register_outputs(self, outputs):
 
 setattr(Tape, "registerOutputs", _register_outputs)
 
-setattr(Real, "value", property(Real.getValue, doc="get the underlying float value of the object"))
+setattr(
+    Real,
+    "value",
+    property(Real.getValue, Real.setValue, doc="get/set the underlying float value of the object"),
+)
 setattr(
     Real,
     "derivative",
