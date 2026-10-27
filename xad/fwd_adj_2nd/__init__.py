@@ -23,8 +23,22 @@
 ##############################################################################
 
 from xad._real import add_float_methods
-from xad._xad.fwd_adj_2nd import Complex, DerivativeRef, Real, Tape
+from xad._xad.fwd_adj_2nd import (
+    CheckpointCallback,
+    Complex,
+    DerivativeRef,
+    Real,
+    ScopedNestedRecording,
+    Tape,
+)
 
-__all__ = ["Complex", "DerivativeRef", "Real", "Tape"]
+__all__ = [
+    "CheckpointCallback",
+    "Complex",
+    "DerivativeRef",
+    "Real",
+    "ScopedNestedRecording",
+    "Tape",
+]
 
 add_float_methods(Real)

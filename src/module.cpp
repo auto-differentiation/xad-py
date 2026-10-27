@@ -54,7 +54,9 @@ void py_fwd_adj_2nd(py::module_ &m)
     py::module_ fwd_adj = m.def_submodule("fwd_adj_2nd");
     py_real<mode::active_type>(fwd_adj);
     py_complex<mode::active_type>(fwd_adj);
+    py_checkpoint_callback<mode::tape_type>(fwd_adj);
     py_tape<mode::tape_type>(fwd_adj);
+    py_scoped_nested_recording<mode::tape_type>(fwd_adj);
 }
 
 void py_fwd_fwd_2nd(py::module_ &m)
