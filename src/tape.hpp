@@ -31,6 +31,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace py = pybind11;
 
@@ -42,6 +43,49 @@ class PyCheckpointCallback : public xad::CheckpointCallback<Tape>
     void computeAdjoint(Tape *tape) override
     {
         PYBIND11_OVERRIDE_PURE(void, xad::CheckpointCallback<Tape>, computeAdjoint, tape);
+    }
+};
+
+// Python references to the callbacks handed to a tape with pushCallback, keyed by tape.
+// XAD deletes the pointers it owns, but Python callbacks are owned by their Python objects,
+// so they are kept here instead of in XAD's list. Heap-allocated and never freed so that no
+// Python object is destroyed after interpreter shutdown.
+template <class Tape>
+class PyOwnedCallbacks
+{
+  public:
+    static void push(py::handle tape, py::object cb)
+    {
+        auto *key = tape.cast<Tape *>();
+        auto &entries = store();
+        auto it = entries.find(key);
+        if (it == entries.end())
+        {
+            // drop the references when the Python tape object goes away (as pybind11's keep_alive)
+            py::cpp_function cleanup(
+                [key](py::handle weakref)
+                {
+                    store().erase(key);
+                    weakref.dec_ref();
+                });
+            py::weakref(tape, cleanup).release();
+            it = entries.emplace(key, py::list()).first;
+        }
+        it->second.append(cb);
+    }
+
+    static void clear(Tape *key)
+    {
+        auto it = store().find(key);
+        if (it != store().end())
+            it->second = py::list();
+    }
+
+  private:
+    static std::unordered_map<Tape *, py::list> &store()
+    {
+        static auto *entries = new std::unordered_map<Tape *, py::list>();
+        return *entries;
     }
 };
 
@@ -157,6 +201,25 @@ void py_tape(py::module_ &m)
         .def("resetTo", &Tape::resetTo, "reset the tape back to the given position")
         .def("insertCallback", &Tape::insertCallback, py::keep_alive<1, 2>(),
              "insert a checkpoint callback at the current tape position")
+        .def(
+            "pushCallback",
+            [](py::handle self, py::object cb)
+            {
+                if (!py::isinstance<xad::CheckpointCallback<Tape>>(cb))
+                    throw py::type_error("pushCallback expects a CheckpointCallback");
+                PyOwnedCallbacks<Tape>::push(self, cb);
+            },
+            py::arg("callback"),
+            "hand a checkpoint callback to the tape to keep alive until `clearCallbacks` (it is "
+            "not inserted or run)")
+        .def(
+            "clearCallbacks",
+            [](Tape &self)
+            {
+                PyOwnedCallbacks<Tape>::clear(&self);
+                self.clearCallbacks();
+            },
+            "release the callbacks handed to the tape with `pushCallback`")
         .def("getAndResetOutputAdjoint", &Tape::getAndResetOutputAdjoint,
              "get the adjoint at the given slot and reset it to zero (for use in callbacks)")
         .def("incrementAdjoint",
