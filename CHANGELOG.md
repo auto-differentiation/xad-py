@@ -18,11 +18,19 @@ C++ core it is built on.
 - Complex numbers: `Complex` in `adj_1st` and `fwd_1st` with active real and imaginary parts,
   operators with `Real`, float and `complex`, and `xad.cmath` mirroring `cmath`
   ([#2](https://github.com/auto-differentiation/xad-py/issues/2)).
+- Second-order derivatives: `fwd_adj_2nd` and `fwd_fwd_2nd` modes, with `Complex` and `xad.math`;
+  `xad.value`/`xad.derivative` nest as in C++; `xad.jacobian` and `xad.hessian`
+  ([#3](https://github.com/auto-differentiation/xad-py/issues/3)).
 
 ### Changed
 
 - Thread-local tapes: each thread has its own active tape.
 - Dynamic MSVC runtime on Windows.
+
+### Fixed
+
+- An XAD active type of any mode or order is no longer converted implicitly to a float argument.
+- `import xad` alone sets up every mode's `Real` (properties such as `fwd_1st.Real.derivative`).
 
 ## [2.1.0] - 2026-10-24
 

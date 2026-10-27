@@ -34,11 +34,16 @@ if sys.platform == "win32":
     # xad.dll, for extensions linking it from elsewhere
     _dll_dir = os.add_dll_directory(_PKG_DIR)
 
-from ._xad import adj_1st, fwd_1st, __version__  # noqa: E402
+from ._xad import __version__, hessian, jacobian  # noqa: E402
+
+# the mode packages, which add Python-side methods and properties to the bound types
+from . import adj_1st, fwd_1st, fwd_adj_2nd, fwd_fwd_2nd  # noqa: E402
 
 __all__ = [
     "value",
     "derivative",
+    "jacobian",
+    "hessian",
     "get_include",
     "get_cmake_dir",
     "get_library_dir",
@@ -61,31 +66,54 @@ def get_library_dir() -> str:
     return os.path.join(_PKG_DIR, "lib")
 
 
-def value(x: Union[adj_1st.Real, fwd_1st.Real, Any]) -> float:
+# the types xad.value / xad.derivative accept
+_Active = Union[
+    adj_1st.Real,
+    fwd_1st.Real,
+    fwd_adj_2nd.Real,
+    fwd_adj_2nd.DerivativeRef,
+    fwd_fwd_2nd.Real,
+    fwd_fwd_2nd.DerivativeRef,
+]
+_ACTIVE = (
+    adj_1st.Real,
+    fwd_1st.Real,
+    fwd_adj_2nd.Real,
+    fwd_adj_2nd.DerivativeRef,
+    fwd_fwd_2nd.Real,
+    fwd_fwd_2nd.DerivativeRef,
+)
+
+
+def value(x: Union[_Active, Any]) -> Union[float, fwd_1st.Real]:
     """Get the value of an XAD active type - or return the value itself otherwise
 
     Args:
         x (Real | any): Argument to get the value of
 
     Returns:
-        float: The value stored in the variable
+        float | Real: The value stored in the variable; for second order types the
+        inner first order Real, by reference (as in C++)
     """
-    if isinstance(x, adj_1st.Real) or isinstance(x, fwd_1st.Real):
+    if isinstance(x, _ACTIVE):
         return x.getValue()
     else:
         return x
 
 
-def derivative(x: Union[adj_1st.Real, fwd_1st.Real]) -> float:
+def derivative(
+    x: _Active,
+) -> Union[float, fwd_adj_2nd.DerivativeRef, fwd_fwd_2nd.DerivativeRef]:
     """Get the derivative of an XAD active type - forward or adjoint mode
 
     Args:
         x (Real): Argument to extract the derivative information from
 
     Returns:
-        float: The derivative
+        float | DerivativeRef: The derivative; for second order types the inner first order
+        Real, by reference (as in C++), resolved on every access (in adjoint mode it is on tape)
     """
-    if isinstance(x, adj_1st.Real) or isinstance(x, fwd_1st.Real):
+    if isinstance(x, _ACTIVE):
         return x.getDerivative()
     else:
         raise TypeError("type " + type(x).__name__ + " is not an XAD active type")

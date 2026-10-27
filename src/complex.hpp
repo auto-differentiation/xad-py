@@ -43,6 +43,19 @@ inline std::optional<std::complex<double>> py_complex_value(const py::object& o)
     return std::complex<double>(PyComplex_RealAsDouble(o.ptr()), PyComplex_ImagAsDouble(o.ptr()));
 }
 
+// a passive operand (double, std::complex<double>) as XAD's complex operators for T take it: as
+// is for first order, as T / std::complex<T> for higher order (only active operands there)
+template <class T, class P>
+auto py_passive(const P& p)
+{
+    if constexpr (std::is_floating_point_v<typename T::value_type>)
+        return p;
+    else if constexpr (std::is_floating_point_v<P>)
+        return T(p);
+    else
+        return std::complex<T>(p);
+}
+
 // the operator and its reflected form with a Complex, Real, float/int or Python complex operand
 template <class T, class Op>
 void py_complex_binary_op(py::class_<std::complex<T>>& c, const char* name, const char* rname,
@@ -55,7 +68,7 @@ void py_complex_binary_op(py::class_<std::complex<T>>& c, const char* name, cons
         auto w = py_complex_value(o);
         if (!w)
             return py::reinterpret_borrow<py::object>(Py_NotImplemented);
-        return py::cast(reflected ? op(*w, z) : op(z, *w));
+        return py::cast(reflected ? op(py_passive<T>(*w), z) : op(z, py_passive<T>(*w)));
     };
 
     c.def(
@@ -63,14 +76,14 @@ void py_complex_binary_op(py::class_<std::complex<T>>& c, const char* name, cons
         .def(
             name, [op](const C& a, const T& b) { return op(a, b); }, py::is_operator())
         .def(
-            name, [op](const C& a, double b) { return op(a, b); }, py::is_operator())
+            name, [op](const C& a, double b) { return op(a, py_passive<T>(b)); }, py::is_operator())
         .def(
             name, [with_py_complex](const C& a, const py::object& b)
             { return with_py_complex(a, b, false); }, py::is_operator())
         .def(
             rname, [op](const C& a, const T& b) { return op(b, a); }, py::is_operator())
         .def(
-            rname, [op](const C& a, double b) { return op(b, a); }, py::is_operator())
+            rname, [op](const C& a, double b) { return op(py_passive<T>(b), a); }, py::is_operator())
         .def(
             rname, [with_py_complex](const C& a, const py::object& b)
             { return with_py_complex(a, b, true); }, py::is_operator());
@@ -117,8 +130,12 @@ void py_complex(py::module_& m)
         .def(py::self != py::self)
         .def(py::self == T())
         .def(py::self != T())
-        .def(py::self == double())
-        .def(py::self != double())
+        .def(
+            "__eq__", [](const C& a, double b) { return a == py_passive<T>(b); },
+            py::is_operator())
+        .def(
+            "__ne__", [](const C& a, double b) { return a != py_passive<T>(b); },
+            py::is_operator())
         // a Python complex: compare as passive Complex, else defer to the other type
         .def(
             "__eq__", [](const C& a, const py::object& b) { return py_complex_eq(a, b, false); },
@@ -130,18 +147,18 @@ void py_complex(py::module_& m)
              [](const C& z)
              {
                  return py::reinterpret_steal<py::object>(
-                     PyComplex_FromDoubles(z.real().getValue(), z.imag().getValue()));
+                     PyComplex_FromDoubles(xad::detail::passive_value(z.real()), xad::detail::passive_value(z.imag())));
              })
         .def("__repr__",
              [](const C& z)
              {
-                 double im = z.imag().getValue();
-                 return "(" + std::to_string(z.real().getValue()) + (std::signbit(im) ? "-" : "+") +
+                 double im = xad::detail::passive_value(z.imag());
+                 return "(" + std::to_string(xad::detail::passive_value(z.real())) + (std::signbit(im) ? "-" : "+") +
                         std::to_string(std::abs(im)) + "j)";
              })
         // pickle the values only: an unpickled adjoint Complex is passive (not on tape)
         .def(py::pickle([](const C& z)
-                        { return py::make_tuple(z.real().getValue(), z.imag().getValue()); },
+                        { return py::make_tuple(xad::detail::passive_value(z.real()), xad::detail::passive_value(z.imag())); },
                         [](const py::tuple& t)
                         { return C(t[0].cast<double>(), t[1].cast<double>()); }))
         // py::pickle needs protocol 2+: use that reduction for protocols 0/1 too

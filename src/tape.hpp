@@ -33,12 +33,12 @@
 
 namespace py = pybind11;
 
-using Tape = xad::Tape<double>;
-using mode = xad::adj<double>;
-using AReal = mode::active_type;
-
+template <class Tape>
 void py_tape(py::module_ &m)
 {
+    using AReal = typename Tape::active_type;
+    using slot_type = typename Tape::slot_type;
+
     py::class_<Tape>(m, "Tape", py::dynamic_attr())
         .def(py::init([] { return std::make_unique<Tape>(false); }),
              "constructs a tape without activating it")
@@ -90,13 +90,13 @@ void py_tape(py::module_ &m)
             "derivative", [](Tape &self, AReal &d) { return self.derivative(d.getSlot()); },
             "get the slot of the given variable")
         .def(
-            "derivative", [](Tape &self, Tape::slot_type slot) { return self.derivative(slot); },
+            "derivative", [](Tape &self, slot_type slot) { return self.derivative(slot); },
             "get the derivative stored at the given slot position")
         .def(
             "getDerivative", [](Tape &self, AReal &d) { return self.derivative(d.getSlot()); },
             "alias for `derivative`")
         .def(
-            "getDerivative", [](Tape &self, Tape::slot_type slot) { return self.derivative(slot); },
+            "getDerivative", [](Tape &self, slot_type slot) { return self.derivative(slot); },
             "alias for `derivative`")
         .def(
             "setDerivative",
@@ -104,6 +104,6 @@ void py_tape(py::module_ &m)
             "sets the derivative of the given active variable to the value given")
         .def(
             "setDerivative",
-            [](Tape &self, Tape::slot_type slot, double &b) { return self.setDerivative(slot, b); },
+            [](Tape &self, slot_type slot, double &b) { return self.setDerivative(slot, b); },
             "sets the derivative at the given slot to the given value");
 }

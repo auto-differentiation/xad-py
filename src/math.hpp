@@ -208,5 +208,7 @@ void py_math(py::module& m)
 
     add_math_functions<AReal>(m1);
     add_math_functions<FReal>(m1);
+    add_math_functions<xad::fwd_adj<double>::active_type>(m1);
+    add_math_functions<xad::fwd_fwd<double>::active_type>(m1);
     add_math_functions<double>(m1);
 };

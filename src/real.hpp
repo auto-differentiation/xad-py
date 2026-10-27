@@ -29,26 +29,36 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
 #include "double_caster.hpp"
+#include <type_traits>
 
 namespace py = pybind11;
 
 using AReal = xad::AReal<double>;
 using FReal = xad::FReal<double>;
 
-inline void add_extra_methods(py::class_<AReal>& c)
+template <class V>
+inline void add_extra_methods(py::class_<xad::AReal<V>>& c)
 {
+    using T = xad::AReal<V>;
     c.def(
-         "setAdjoint", [](AReal& self, double x) { self.setAdjoint(x); },
+         "setAdjoint", [](T& self, double x) { self.setAdjoint(x); },
          "set adjoint of this variable")
         .def(
-            "shouldRecord", [](const AReal& self) { return self.shouldRecord(); },
+            "shouldRecord", [](const T& self) { return self.shouldRecord(); },
             "Check if the variable is registered on tape and should record")
         .def(
-            "getSlot", [](const AReal& self) { return self.getSlot(); },
+            "getSlot", [](const T& self) { return self.getSlot(); },
             "Get the slot of this variable on the tape");
 }
 
-inline void add_extra_methods(py::class_<FReal>&) {}
+template <class V>
+inline void add_extra_methods(py::class_<xad::FReal<V>>& c)
+{
+    using T = xad::FReal<V>;
+    c.def(
+        "setValue", [](T& self, const V& v) { self.value() = v; },
+        "set the underlying value of this variable");
+}
 
 template <class T, class T1, class T2>
 inline T py_fmod(const T1& x, const T2& y)
@@ -75,6 +85,35 @@ inline T py_floordiv(const T1& x, const T2& y)
     return xad::floor(x / y);
 }
 
+// The derivative of a higher order Real (a Real itself), resolved on every access as it lives in
+// the tape, whose storage moves as it grows: no reference into it is handed out. Keeps the Real
+// alive; access raises (NoTapeException, OutOfRange) when there is no tape or slot.
+template <class T>
+struct DerivativeRef
+{
+    py::object owner;
+    T& x;
+
+    typename T::derivative_type& get() const { return x.derivative(); }
+};
+
+template <class T>
+void py_derivative_ref(py::module_& m)
+{
+    using D = DerivativeRef<T>;
+    auto getValue = [](const D& d) { return d.get().getValue(); };
+    auto setValue = [](const D& d, double v) { d.get().value() = v; };
+    auto getDerivative = [](const D& d) { return d.get().getDerivative(); };
+    auto setDerivative = [](const D& d, double v) { d.get().setDerivative(v); };
+    py::class_<D>(m, "DerivativeRef", "the derivative of a higher order Real, by reference")
+        .def("getValue", getValue, "get the value of the derivative")
+        .def("setValue", setValue, "set the value of the derivative")
+        .def("getDerivative", getDerivative, "get the derivative of the derivative")
+        .def("setDerivative", setDerivative, "set the derivative of the derivative")
+        .def_property("value", getValue, setValue, "get/set the value")
+        .def_property("derivative", getDerivative, setDerivative, "get/set the derivative");
+}
+
 template <class T>
 void py_real(py::module_& m)
 {
@@ -90,7 +129,7 @@ void py_real(py::module_& m)
         .def(py::self > py::self)
         .def(py::self < py::self)
         .def("__int__", [](const T& d) { return int(d.getValue()); })
-        .def("__float__", [](const T& d) { return d.getValue(); })
+        .def("__float__", [](const T& d) { return xad::detail::passive_value(d); })
         .def("__bool__", [](const T& d) { return bool(d); })
         .def("__neg__", [](const T& d) { return T(-d); })
         .def("__pos__", [](const T& d) { return d; })
@@ -118,7 +157,8 @@ void py_real(py::module_& m)
             "__truediv__", [](const T& a, const T& b) { return T(a / b); }, py::is_operator())
         .def(
             "__rtruediv__", [](const T& a, double b) { return T(b / a); }, py::is_operator())
-        .def("__repr__", [](const T& a) { return std::to_string(a.getValue()); })
+        .def("__repr__",
+             [](const T& a) { return std::to_string(xad::detail::passive_value(a)); })
         .def(
             "__rgt__", [](const T& a, double b) { return (b > a); }, py::is_operator())
         .def(
@@ -172,13 +212,12 @@ void py_real(py::module_& m)
         .def("__rfloordiv__", [](const T& y, double x) { return py_floordiv<T>(x, y); })
         // to set/get derivatives
         .def(
-            "getValue", [](const T& self) { return self.getValue(); }, "get the underlying value")
+            "getValue", [](T& self) -> auto& { return self.value(); },
+            py::return_value_policy::reference_internal,
+            "get the underlying value (for higher order, the inner Real by reference)")
         .def(
             "setDerivative", [](T& self, double v) { self.setDerivative(v); },
             "set the adjoint of this variable")
-        .def(
-            "getDerivative", [](const T& self) { return self.getDerivative(); },
-            "get the adjoint of this variable")
         .def(
             "conjugate", [](const T& x) { return x; }, "complex conjugate")
         .def(
@@ -186,7 +225,7 @@ void py_real(py::module_& m)
         .def(
             "imag", [](const T&) { return T(0.0); }, "imaginary part")
         // pickle the value only: an unpickled adjoint Real is passive (not on tape)
-        .def(py::pickle([](const T& x) { return py::make_tuple(x.getValue()); },
+        .def(py::pickle([](const T& x) { return py::make_tuple(xad::detail::passive_value(x)); },
                         [](const py::tuple& t) { return T(t[0].cast<double>()); }))
         // py::pickle needs protocol 2+: use that reduction for protocols 0/1 too
         .def(
@@ -198,6 +237,19 @@ void py_real(py::module_& m)
                     .attr("__reduce_ex__")(self, 2);
             },
             py::arg("protocol"));
+
+    if constexpr (std::is_floating_point_v<typename T::derivative_type>)
+        c.def(
+            "getDerivative", [](const T& self) { return self.getDerivative(); },
+            "get the adjoint of this variable");
+    else
+    {
+        py_derivative_ref<T>(m);
+        c.def(
+            "getDerivative",
+            [](const py::object& self) { return DerivativeRef<T>{self, self.cast<T&>()}; },
+            "get the adjoint of this variable, the inner Real as a DerivativeRef");
+    }
 
     add_extra_methods(c);
 }

@@ -65,6 +65,7 @@ pybind11_add_module(
   real.hpp
   complex.hpp
   exceptions.hpp
+  jacobian_hessian.hpp
   double_caster.hpp)
 
 set_target_properties(_xad PROPERTIES CXX_STANDARD 17)
