@@ -30,6 +30,7 @@
 #include "double_caster.hpp"
 #include <memory>
 #include <optional>
+#include <stdexcept>
 
 namespace py = pybind11;
 
@@ -52,6 +53,55 @@ void py_checkpoint_callback(py::module_ &m)
         .def(py::init<>())
         .def("computeAdjoint", &Callback::computeAdjoint,
              "called during adjoint computation when the tape reaches this callback");
+}
+
+// owns the nested recording so that it ends at __exit__, not at garbage collection
+template <class Tape>
+class PyScopedNestedRecording
+{
+  public:
+    explicit PyScopedNestedRecording(Tape &tape)
+        : nested_(std::make_unique<xad::ScopedNestedRecording<Tape>>(&tape))
+    {
+    }
+    void end() { nested_.reset(); }
+    xad::ScopedNestedRecording<Tape> &get()
+    {
+        if (!nested_)
+            throw std::runtime_error("nested recording has already ended");
+        return *nested_;
+    }
+
+  private:
+    std::unique_ptr<xad::ScopedNestedRecording<Tape>> nested_;
+};
+
+template <class Tape>
+void py_scoped_nested_recording(py::module_ &m)
+{
+    using Nested = PyScopedNestedRecording<Tape>;
+    py::class_<Nested>(m, "ScopedNestedRecording")
+        .def(py::init<Tape &>(), py::keep_alive<1, 2>(),
+             "starts a nested recording on the given tape (for use in checkpoint callbacks)")
+        .def("__enter__", [](Nested &self) -> Nested & { return self; },
+             py::return_value_policy::reference_internal)
+        .def(
+            "__exit__",
+            [](Nested &self, const std::optional<pybind11::type> &,
+               const std::optional<pybind11::object> &, const std::optional<pybind11::object> &)
+            { self.end(); },
+            "ends the nested recording when exiting the context")
+        .def(
+            "computeAdjoints", [](Nested &self) { self.get().computeAdjoints(); },
+            "propagate adjoints through the nested recording")
+        .def(
+            "incrementAdjoint",
+            [](Nested &self, typename Tape::slot_type slot, const typename Tape::value_type &value)
+            { self.get().incrementAdjoint(slot, value); },
+            "add the given value to the adjoint at the given slot of the outer recording")
+        .def(
+            "getTape", [](Nested &self) -> Tape & { return *self.get().getTape(); },
+            py::return_value_policy::reference, "get the tape of the nested recording");
 }
 
 template <class Tape>

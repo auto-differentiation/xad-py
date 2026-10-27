@@ -45,6 +45,7 @@ void py_adj_1st(py::module_ &m)
     py_complex<AReal>(adj);
     py_checkpoint_callback<xad::Tape<double>>(adj);
     py_tape<xad::Tape<double>>(adj);
+    py_scoped_nested_recording<xad::Tape<double>>(adj);
 }
 
 void py_fwd_adj_2nd(py::module_ &m)

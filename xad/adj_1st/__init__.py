@@ -23,9 +23,9 @@
 ##############################################################################
 
 from xad._real import add_float_methods
-from xad._xad.adj_1st import CheckpointCallback, Complex, Real, Tape
+from xad._xad.adj_1st import CheckpointCallback, Complex, Real, ScopedNestedRecording, Tape
 
-__all__ = ["CheckpointCallback", "Complex", "Real", "Tape"]
+__all__ = ["CheckpointCallback", "Complex", "Real", "ScopedNestedRecording", "Tape"]
 
 
 def _register_inputs(self, inputs):
