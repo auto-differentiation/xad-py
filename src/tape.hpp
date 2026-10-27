@@ -33,6 +33,27 @@
 
 namespace py = pybind11;
 
+// lets Python subclasses override computeAdjoint
+template <class Tape>
+class PyCheckpointCallback : public xad::CheckpointCallback<Tape>
+{
+  public:
+    void computeAdjoint(Tape *tape) override
+    {
+        PYBIND11_OVERRIDE_PURE(void, xad::CheckpointCallback<Tape>, computeAdjoint, tape);
+    }
+};
+
+template <class Tape>
+void py_checkpoint_callback(py::module_ &m)
+{
+    using Callback = xad::CheckpointCallback<Tape>;
+    py::class_<Callback, PyCheckpointCallback<Tape>>(m, "CheckpointCallback")
+        .def(py::init<>())
+        .def("computeAdjoint", &Callback::computeAdjoint,
+             "called during adjoint computation when the tape reaches this callback");
+}
+
 template <class Tape>
 void py_tape(py::module_ &m)
 {
@@ -84,6 +105,8 @@ void py_tape(py::module_ &m)
         .def("clearDerivativesAfter", &Tape::clearDerivativesAfter,
              "clear all derivatives after the given position")
         .def("resetTo", &Tape::resetTo, "reset the tape back to the given position")
+        .def("insertCallback", &Tape::insertCallback, py::keep_alive<1, 2>(),
+             "insert a checkpoint callback at the current tape position")
         .def("printStatus", &Tape::printStatus,
              "output the status of the tape (for debugging/information)")
         .def(

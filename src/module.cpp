@@ -43,6 +43,7 @@ void py_adj_1st(py::module_ &m)
     py::module_ adj = m.def_submodule("adj_1st");
     py_real<AReal>(adj);
     py_complex<AReal>(adj);
+    py_checkpoint_callback<xad::Tape<double>>(adj);
     py_tape<xad::Tape<double>>(adj);
 }
 
