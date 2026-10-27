@@ -39,7 +39,7 @@ void py_tape(py::module_ &m)
     using AReal = typename Tape::active_type;
     using slot_type = typename Tape::slot_type;
 
-    py::class_<Tape>(m, "Tape", py::dynamic_attr())
+    py::class_<Tape>(m, "Tape")
         .def(py::init([] { return std::make_unique<Tape>(false); }),
              "constructs a tape without activating it")
         .def(

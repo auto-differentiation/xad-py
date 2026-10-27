@@ -26,6 +26,8 @@ C++ core it is built on.
 
 - Thread-local tapes: each thread has its own active tape.
 - Dynamic MSVC runtime on Windows.
+- Assigning an unknown attribute to a `Real` or `Tape` raises `AttributeError`; it was stored
+  silently, so a typo such as `x.derivatve = 1.0` was lost.
 
 ### Fixed
 

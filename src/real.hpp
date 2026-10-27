@@ -117,8 +117,7 @@ void py_derivative_ref(py::module_& m)
 template <class T>
 void py_real(py::module_& m)
 {
-    auto c = py::class_<T>(m, "Real", py::dynamic_attr(),
-                           "active arithmetic type for first order adjoint mode");
+    auto c = py::class_<T>(m, "Real", "active arithmetic type for first order adjoint mode");
 
     c.def(py::init<double>())
         .def(py::init<>())
