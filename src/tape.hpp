@@ -107,6 +107,12 @@ void py_tape(py::module_ &m)
         .def("resetTo", &Tape::resetTo, "reset the tape back to the given position")
         .def("insertCallback", &Tape::insertCallback, py::keep_alive<1, 2>(),
              "insert a checkpoint callback at the current tape position")
+        .def("getAndResetOutputAdjoint", &Tape::getAndResetOutputAdjoint,
+             "get the adjoint at the given slot and reset it to zero (for use in callbacks)")
+        .def("incrementAdjoint",
+             static_cast<void (Tape::*)(slot_type, const typename Tape::value_type &)>(
+                 &Tape::incrementAdjoint),
+             "add the given value to the adjoint at the given slot (for use in callbacks)")
         .def("printStatus", &Tape::printStatus,
              "output the status of the tape (for debugging/information)")
         .def(
