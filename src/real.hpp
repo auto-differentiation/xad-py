@@ -248,6 +248,10 @@ void py_real(py::module_& m)
             "getDerivative",
             [](const py::object& self) { return DerivativeRef<T>{self, self.cast<T&>()}; },
             "get the adjoint of this variable, the inner Real as a DerivativeRef");
+        // read-only attributes, the very getters (the inner Real by reference, DerivativeRef)
+        auto property = py::module_::import("builtins").attr("property");
+        c.attr("value") = property(c.attr("getValue"));
+        c.attr("derivative") = property(c.attr("getDerivative"));
     }
 
     add_extra_methods(c);
