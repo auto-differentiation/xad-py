@@ -31,13 +31,15 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace py = pybind11;
 
-// n-d array of active values, C-contiguous
+// n-d array of active values: a view (shape, element strides, offset) on shared storage, so that
+// slices and reshapes write through to the base array
 template <class T>
 class Array
 {
@@ -45,12 +47,13 @@ class Array
     using float_array = py::array_t<double, py::array::c_style | py::array::forcecast>;
 
     explicit Array(const float_array& a)
-        : shape_(a.shape(), a.shape() + a.ndim()), data_(a.data(), a.data() + a.size())
+        : Array(std::vector<py::ssize_t>(a.shape(), a.shape() + a.ndim()),
+                std::vector<T>(a.data(), a.data() + a.size()))
     {
     }
 
     // a 0-d array holding x (an active scalar operand, broadcast like a NumPy scalar)
-    explicit Array(const T& x) : data_{x} {}
+    explicit Array(const T& x) : Array(std::vector<py::ssize_t>{}, std::vector<T>{x}) {}
 
     py::tuple shape() const
     {
@@ -59,11 +62,26 @@ class Array
         return t;
     }
 
+    std::size_t ndim() const { return shape_.size(); }
+
+    py::ssize_t dim(std::size_t d) const { return shape_[d]; }
+
+    std::size_t size() const
+    {
+        std::size_t n = 1;
+        for (py::ssize_t e : shape_) n *= static_cast<std::size_t>(e);
+        return n;
+    }
+
     float_array values() const
     {
         float_array out(shape_);
         double* p = out.mutable_data();
-        for (const T& x : data_) *p++ = xad::value(x);
+        visit(
+            [&](auto e)
+            {
+                for (std::size_t i = 0; i < size(); ++i) p[i] = xad::value(e(i));
+            });
         return out;
     }
 
@@ -71,100 +89,110 @@ class Array
     {
         float_array out(shape_);
         double* p = out.mutable_data();
-        for (const T& x : data_) *p++ = x.getDerivative();
+        visit(
+            [&](auto e)
+            {
+                for (std::size_t i = 0; i < size(); ++i) p[i] = e(i).getDerivative();
+            });
         return out;
     }
 
-    T& item(py::ssize_t i)
-    {
-        const auto n = static_cast<py::ssize_t>(data_.size());
-        if (i < 0)
-            i += n;
-        if (i < 0 || i >= n)
-            throw py::index_error("array index out of range");
-        return data_[static_cast<std::size_t>(i)];
-    }
+    // the element of a 0-d array (view)
+    T& element() const { return (*data_)[static_cast<std::size_t>(offset_)]; }
 
-    // the element at a full index (one int per dimension, negative counts from the end)
-    T& item(const py::tuple& index)
+    // NumPy basic indexing with an int, a slice or a tuple of them: a view, 0-d when every
+    // dimension is indexed by an int
+    Array view(const py::object& index) const
     {
-        if (index.size() != shape_.size())
-            throw py::index_error("array index must have one int per dimension");
-        std::size_t flat = 0;
+        const py::tuple idx =
+            py::isinstance<py::tuple>(index) ? index.cast<py::tuple>() : py::make_tuple(index);
+        if (idx.size() > shape_.size())
+            throw py::index_error("too many indices for array");
+        Array v(*this);
+        v.shape_.clear();
+        v.strides_.clear();
         for (std::size_t d = 0; d < shape_.size(); ++d)
         {
-            auto i = index[d].cast<py::ssize_t>();
-            if (i < 0)
-                i += shape_[d];
-            if (i < 0 || i >= shape_[d])
-                throw py::index_error("array index out of range");
-            flat = flat * static_cast<std::size_t>(shape_[d]) + static_cast<std::size_t>(i);
+            if (d >= idx.size())
+            {
+                v.shape_.push_back(shape_[d]);
+                v.strides_.push_back(strides_[d]);
+            }
+            else if (py::isinstance<py::slice>(idx[d]))
+            {
+                py::ssize_t start = 0, stop = 0, step = 0, length = 0;
+                if (!idx[d].cast<py::slice>().compute(shape_[d], &start, &stop, &step, &length))
+                    throw py::error_already_set();
+                v.offset_ += start * strides_[d];
+                v.shape_.push_back(length);
+                v.strides_.push_back(strides_[d] * step);
+            }
+            else
+            {
+                auto i = idx[d].cast<py::ssize_t>();
+                if (i < 0)
+                    i += shape_[d];
+                if (i < 0 || i >= shape_[d])
+                    throw py::index_error("array index out of range");
+                v.offset_ += i * strides_[d];
+            }
         }
-        return data_[flat];
+        return v;
+    }
+
+    // a view with another shape of the same size (contiguous arrays only)
+    Array reshape(std::vector<py::ssize_t> shape) const
+    {
+        std::size_t n = 1;
+        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
+        if (n != size())
+            throw py::value_error("cannot reshape array into a shape of another size");
+        if (!contiguous())
+            throw py::value_error("reshape of a non-contiguous view is not supported");
+        Array v(*this);
+        v.strides_ = c_strides(shape);
+        v.shape_ = std::move(shape);
+        return v;
+    }
+
+    // f(element) for every element in C order
+    template <class F>
+    void for_each(F f)
+    {
+        T* base = data_->data();
+        for_each_offset([&](std::size_t o) { f(base[o]); });
     }
 
     // elementwise op(a_i, b_i), broadcasting the shapes as NumPy does
     template <class Op>
     Array map(const Array& b, Op op) const
     {
-        if (shape_ == b.shape_)
-        {
-            std::vector<T> r(data_.size());
-            for (std::size_t i = 0; i < data_.size(); ++i) r[i] = op(data_[i], b.data_[i]);
-            return Array(shape_, std::move(r));
-        }
-        const std::size_t nd = std::max(shape_.size(), b.shape_.size());
-        std::vector<py::ssize_t> shape(nd), sa = broadcast_strides(nd),
-                                            sb = b.broadcast_strides(nd);
-        for (std::size_t d = 0; d < nd; ++d)
-        {
-            const py::ssize_t na = extent(nd, d), nb = b.extent(nd, d);
-            if (na != nb && na != 1 && nb != 1)
-                throw py::value_error("operands could not be broadcast together");
-            shape[d] = na == 1 ? nb : na;
-        }
-        std::size_t n = 1;
-        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
-        std::vector<T> r(n);
-        std::vector<py::ssize_t> idx(nd, 0);
-        py::ssize_t ia = 0, ib = 0;
-        for (std::size_t i = 0; i < n; ++i)
-        {
-            r[i] = op(data_[static_cast<std::size_t>(ia)], b.data_[static_cast<std::size_t>(ib)]);
-            // next index, last dimension fastest
-            for (std::size_t d = nd; d-- > 0;)
-            {
-                ia += sa[d];
-                ib += sb[d];
-                if (++idx[d] < shape[d])
-                    break;
-                ia -= sa[d] * shape[d];
-                ib -= sb[d] * shape[d];
-                idx[d] = 0;
-            }
-        }
-        return Array(std::move(shape), std::move(r));
+        return visit([&](auto ea) { return b.visit([&](auto eb) { return map(b, op, ea, eb); }); });
     }
 
     // elementwise op(a_i)
     template <class Op>
     Array map(Op op) const
     {
-        std::vector<T> r(data_.size());
-        for (std::size_t i = 0; i < data_.size(); ++i) r[i] = op(data_[i]);
-        return Array(shape_, std::move(r));
+        return visit(
+            [&](auto e)
+            {
+                std::vector<T> r(size());
+                for (std::size_t i = 0; i < r.size(); ++i) r[i] = op(e(i));
+                return Array(shape_, std::move(r));
+            });
     }
 
     T sum() const
     {
-        T s = 0.0;
-        for (const T& x : data_) s += x;
-        return s;
+        return visit(
+            [&](auto e)
+            {
+                T s = 0.0;
+                for (std::size_t i = 0; i < size(); ++i) s += e(i);
+                return s;
+            });
     }
-
-    std::size_t ndim() const { return shape_.size(); }
-
-    py::ssize_t dim(std::size_t d) const { return shape_[d]; }
 
     // fold of op, starting from init, over the dimensions flagged in reduced; keepdims keeps them
     // with extent 1
@@ -192,21 +220,25 @@ class Array
                 shape.push_back(1);
         }
         std::vector<T> r(n, T(init));
-        std::vector<py::ssize_t> idx(nd, 0);
-        std::size_t io = 0;
-        for (const T& x : data_)
-        {
-            r[io] = op(r[io], x);
-            // next index, last dimension fastest
-            for (std::size_t d = nd; d-- > 0;)
+        visit(
+            [&](auto e)
             {
-                io += strides[d];
-                if (++idx[d] < shape_[d])
-                    break;
-                io -= strides[d] * static_cast<std::size_t>(shape_[d]);
-                idx[d] = 0;
-            }
-        }
+                std::vector<py::ssize_t> idx(nd, 0);
+                std::size_t io = 0;
+                for (std::size_t i = 0; i < size(); ++i)
+                {
+                    r[io] = op(r[io], e(i));
+                    // next index, last dimension fastest
+                    for (std::size_t d = nd; d-- > 0;)
+                    {
+                        io += strides[d];
+                        if (++idx[d] < shape_[d])
+                            break;
+                        io -= strides[d] * static_cast<std::size_t>(shape_[d]);
+                        idx[d] = 0;
+                    }
+                }
+            });
         return Array(std::move(shape), std::move(r));
     }
 
@@ -223,13 +255,22 @@ class Array
         if (k != kb)
             throw py::value_error("matmul: mismatch in the core dimension");
         std::vector<T> r(m * n, T(0.0));
-        for (std::size_t i = 0; i < m; ++i)
-            for (std::size_t j = 0; j < n; ++j)
+        visit(
+            [&](auto ea)
             {
-                T s = 0.0;
-                for (std::size_t l = 0; l < k; ++l) s += data_[i * k + l] * b.data_[l * n + j];
-                r[i * n + j] = s;
-            }
+                b.visit(
+                    [&](auto eb)
+                    {
+                        for (std::size_t i = 0; i < m; ++i)
+                            for (std::size_t j = 0; j < n; ++j)
+                            {
+                                T s = 0.0;
+                                for (std::size_t l = 0; l < k; ++l)
+                                    s += ea(i * k + l) * eb(l * n + j);
+                                r[i * n + j] = s;
+                            }
+                    });
+            });
         std::vector<py::ssize_t> shape;
         if (shape_.size() == 2)
             shape.push_back(shape_[0]);
@@ -240,8 +281,118 @@ class Array
 
   private:
     Array(std::vector<py::ssize_t> shape, std::vector<T> data)
-        : shape_(std::move(shape)), data_(std::move(data))
+        : shape_(std::move(shape)),
+          strides_(c_strides(shape_)),
+          data_(std::make_shared<std::vector<T>>(std::move(data)))
     {
+    }
+
+    // C-order element strides of shape
+    static std::vector<py::ssize_t> c_strides(const std::vector<py::ssize_t>& shape)
+    {
+        std::vector<py::ssize_t> strides(shape.size());
+        py::ssize_t s = 1;
+        for (std::size_t d = shape.size(); d-- > 0;)
+        {
+            strides[d] = s;
+            s *= shape[d];
+        }
+        return strides;
+    }
+
+    // whether the elements are adjacent in C order from the offset
+    bool contiguous() const
+    {
+        py::ssize_t s = 1;
+        for (std::size_t d = shape_.size(); d-- > 0;)
+        {
+            if (shape_[d] != 1 && strides_[d] != s)
+                return false;
+            s *= shape_[d];
+        }
+        return true;
+    }
+
+    // f(storage offset) for every element in C order
+    template <class F>
+    void for_each_offset(F f) const
+    {
+        const std::size_t nd = shape_.size();
+        std::vector<py::ssize_t> idx(nd, 0);
+        py::ssize_t o = offset_;
+        for (std::size_t i = 0, n = size(); i < n; ++i)
+        {
+            f(static_cast<std::size_t>(o));
+            // next index, last dimension fastest
+            for (std::size_t d = nd; d-- > 0;)
+            {
+                o += strides_[d];
+                if (++idx[d] < shape_[d])
+                    break;
+                o -= strides_[d] * shape_[d];
+                idx[d] = 0;
+            }
+        }
+    }
+
+    // f(e) with e(i) the i-th element in C order: direct for contiguous arrays, through a gathered
+    // list of element pointers otherwise
+    template <class F>
+    decltype(auto) visit(F&& f) const
+    {
+        const T* base = data_->data();
+        if (contiguous())
+        {
+            const T* p = base + offset_;
+            return f([p](std::size_t i) -> const T& { return p[i]; });
+        }
+        std::vector<const T*> elements;
+        elements.reserve(size());
+        for_each_offset([&](std::size_t o) { elements.push_back(base + o); });
+        return f([&elements](std::size_t i) -> const T& { return *elements[i]; });
+    }
+
+    // map(b, op) with the elements of this and b as e(i), eb(i)
+    template <class Op, class EA, class EB>
+    Array map(const Array& b, Op op, EA ea, EB eb) const
+    {
+        if (shape_ == b.shape_)
+        {
+            std::vector<T> r(size());
+            for (std::size_t i = 0; i < r.size(); ++i) r[i] = op(ea(i), eb(i));
+            return Array(shape_, std::move(r));
+        }
+        const std::size_t nd = std::max(shape_.size(), b.shape_.size());
+        std::vector<py::ssize_t> shape(nd), sa = broadcast_strides(nd),
+                                            sb = b.broadcast_strides(nd);
+        for (std::size_t d = 0; d < nd; ++d)
+        {
+            const py::ssize_t na = extent(nd, d), nb = b.extent(nd, d);
+            if (na != nb && na != 1 && nb != 1)
+                throw py::value_error("operands could not be broadcast together");
+            shape[d] = na == 1 ? nb : na;
+        }
+        std::size_t n = 1;
+        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
+        std::vector<T> r(n);
+        std::vector<py::ssize_t> idx(nd, 0);
+        py::ssize_t ia = 0, ib = 0;
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            r[i] = op(ea(static_cast<std::size_t>(ia)), eb(static_cast<std::size_t>(ib)));
+            // next index, last dimension fastest
+            for (std::size_t d = nd; d-- > 0;)
+            {
+                ia += sa[d];
+                ib += sb[d];
+                if (++idx[d] < shape[d])
+                    break;
+                ia -= sa[d] * shape[d];
+                ib -= sb[d] * shape[d];
+                idx[d] = 0;
+            }
+        }
+        return Array(std::move(shape), std::move(r));
     }
 
     // the extent of dimension d with the shape right-aligned to nd dimensions
@@ -267,7 +418,9 @@ class Array
     }
 
     std::vector<py::ssize_t> shape_;
-    std::vector<T> data_;
+    std::vector<py::ssize_t> strides_;  // in elements, can be negative
+    py::ssize_t offset_ = 0;            // of the first element in data_
+    std::shared_ptr<std::vector<T>> data_;
 };
 
 // the operator and its reflected form with an Array, Real or float/int operand
@@ -342,7 +495,7 @@ template <class T>
 py::object array_or_scalar(Array<T> r)
 {
     if (r.ndim() == 0)
-        return py::cast(T(r.item(0)));
+        return py::cast(T(r.element()));
     return py::cast(std::move(r));
 }
 
@@ -421,6 +574,16 @@ inline std::vector<bool> reduced_dimensions(const py::object& axis, std::size_t 
     return reduced;
 }
 
+// a NumPy shape argument: an int or a sequence of ints
+inline std::vector<py::ssize_t> shape_argument(const py::handle& shape)
+{
+    if (py::isinstance<py::int_>(shape))
+        return {shape.cast<py::ssize_t>()};
+    std::vector<py::ssize_t> r;
+    for (const auto& e : shape) r.push_back(e.cast<py::ssize_t>());
+    return r;
+}
+
 // NumPy's __array_function__: sum, prod and mean (with axis, keepdims) on an Array,
 // NotImplemented otherwise (NumPy then raises TypeError)
 template <class T>
@@ -436,6 +599,9 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
         return array_or_scalar(
             a.template cast<const Array<T>&>().matmul(b.template cast<const Array<T>&>()));
     }
+    if (name == "reshape" && args.size() == 2 && kwargs.size() == 0 &&
+        py::isinstance<Array<T>>(args[0]))
+        return py::cast(args[0].cast<const Array<T>&>().reshape(shape_argument(args[1])));
     if ((name != "sum" && name != "prod" && name != "mean") || args.size() < 1 || args.size() > 2 ||
         !py::isinstance<Array<T>>(args[0]))
         return unsupported;
@@ -469,31 +635,46 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
 }
 
 template <class T>
-void py_array(py::module_& m)
+py::class_<Array<T>> py_array(py::module_& m)
 {
-    auto c =
-        py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
-            .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
-                 "an array from a float array or (nested) sequence of floats")
-            .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
-            .def_property_readonly("values", &Array<T>::values,
-                                   "the values of the elements as a float array")
-            .def_property_readonly("derivatives", &Array<T>::derivatives,
-                                   "the derivatives of the elements as a float array")
-            .def("__getitem__", py::overload_cast<py::ssize_t>(&Array<T>::item), py::arg("index"),
-                 py::return_value_policy::reference_internal, "the element itself, not a copy")
-            .def("__getitem__", py::overload_cast<const py::tuple&>(&Array<T>::item),
-                 py::arg("index"), py::return_value_policy::reference_internal,
-                 "the element at a full index itself, not a copy")
-            .def("sum", &Array<T>::sum, "the sum of all elements")
-            .def(
-                "__matmul__",
-                [](const Array<T>& a, const Array<T>& b) { return array_or_scalar(a.matmul(b)); },
-                py::is_operator(), "matrix product of 1-d and 2-d arrays")
-            .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
-                 py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
-            .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
-                 "NumPy ufunc dispatch to XAD's elementwise math");
+    auto c = py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
+                 .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
+                      "an array from a float array or (nested) sequence of floats")
+                 .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
+                 .def_property_readonly("values", &Array<T>::values,
+                                        "the values of the elements as a float array")
+                 .def_property_readonly("derivatives", &Array<T>::derivatives,
+                                        "the derivatives of the elements as a float array")
+                 .def(
+                     "__getitem__",
+                     [](const py::object& self, const py::object& index) -> py::object
+                     {
+                         Array<T> v = self.cast<const Array<T>&>().view(index);
+                         if (v.ndim() == 0)
+                             return py::cast(&v.element(),
+                                             py::return_value_policy::reference_internal, self);
+                         return py::cast(std::move(v));
+                     },
+                     py::arg("index"),
+                     "NumPy basic indexing: the element itself for an int per dimension, a view "
+                     "otherwise")
+                 .def(
+                     "__setitem__", [](const Array<T>& a, const py::object& index, double x)
+                     { a.view(index).for_each([x](T& e) { e = x; }); }, py::arg("index"),
+                     py::arg("value"), "set the indexed elements to a float")
+                 .def(
+                     "reshape", [](const Array<T>& a, const py::args& shape)
+                     { return a.reshape(shape_argument(shape.size() == 1 ? shape[0] : shape)); },
+                     "a view with another shape")
+                 .def("sum", &Array<T>::sum, "the sum of all elements")
+                 .def(
+                     "__matmul__", [](const Array<T>& a, const Array<T>& b)
+                     { return array_or_scalar(a.matmul(b)); }, py::is_operator(),
+                     "matrix product of 1-d and 2-d arrays")
+                 .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
+                      py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
+                 .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
+                      "NumPy ufunc dispatch to XAD's elementwise math");
     py_array_binary_op(c, "__add__", "__radd__",
                        [](const auto& x, const auto& y) { return T(x + y); });
     py_array_binary_op(c, "__sub__", "__rsub__",
@@ -502,4 +683,5 @@ void py_array(py::module_& m)
                        [](const auto& x, const auto& y) { return T(x * y); });
     py_array_binary_op(c, "__truediv__", "__rtruediv__",
                        [](const auto& x, const auto& y) { return T(x / y); });
+    return c;
 }

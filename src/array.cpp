@@ -25,4 +25,17 @@
 #include "array.hpp"
 #include "double_caster.hpp"  // first: must precede any double caster use
 
-void py_array_adj_1st(py::module_& m) { py_array<xad::AReal<double>>(m); }
+void py_array_adj_1st(py::module_& m)
+{
+    using T = xad::AReal<double>;
+    using Tape = xad::Tape<double>;
+    py_array<T>(m)
+        .def(
+            "_register_inputs",
+            [](Array<T>& a, Tape& t) { a.for_each([&](T& x) { t.registerInput(x); }); },
+            py::arg("tape"), "register the elements on tape as inputs, in C order")
+        .def(
+            "_register_outputs",
+            [](Array<T>& a, Tape& t) { a.for_each([&](T& x) { t.registerOutput(x); }); },
+            py::arg("tape"), "register the elements on tape as outputs, in C order");
+}

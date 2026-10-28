@@ -36,6 +36,9 @@ __all__ = ["Array", "CheckpointCallback", "Complex", "Real", "ScopedNestedRecord
 
 
 def _register_inputs(self, inputs):
+    if isinstance(inputs, Array):
+        inputs._register_inputs(self)
+        return
     for i in inputs:
         self.registerInput(i)
 
@@ -44,6 +47,9 @@ setattr(Tape, "registerInputs", _register_inputs)
 
 
 def _register_outputs(self, outputs):
+    if isinstance(outputs, Array):
+        outputs._register_outputs(self)
+        return
     for o in outputs:
         self.registerOutput(o)
 
