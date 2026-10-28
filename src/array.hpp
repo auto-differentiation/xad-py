@@ -28,6 +28,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <cstddef>
+#include <utility>
 #include <vector>
 #include "double_caster.hpp"
 
@@ -81,7 +82,30 @@ class Array
         return data_[static_cast<std::size_t>(i)];
     }
 
+    Array operator*(const Array& b) const
+    {
+        if (shape_ != b.shape_)
+            throw py::value_error("operands could not be broadcast together");
+        std::vector<T> r(data_.size());
+        for (std::size_t i = 0; i < data_.size(); ++i)
+            r[i] = data_[i] * b.data_[i];
+        return Array(shape_, std::move(r));
+    }
+
+    T sum() const
+    {
+        T s = 0.0;
+        for (const T& x : data_)
+            s += x;
+        return s;
+    }
+
   private:
+    Array(std::vector<py::ssize_t> shape, std::vector<T> data)
+        : shape_(std::move(shape)), data_(std::move(data))
+    {
+    }
+
     std::vector<py::ssize_t> shape_;
     std::vector<T> data_;
 };
@@ -98,5 +122,7 @@ void py_array(py::module_& m)
         .def_property_readonly("derivatives", &Array<T>::derivatives,
                                "the derivatives of the elements as a float array")
         .def("__getitem__", &Array<T>::item, py::arg("index"),
-             py::return_value_policy::reference_internal, "the element itself, not a copy");
+             py::return_value_policy::reference_internal, "the element itself, not a copy")
+        .def("__mul__", &Array<T>::operator*, py::is_operator())
+        .def("sum", &Array<T>::sum, "the sum of all elements");
 }
