@@ -144,6 +144,47 @@ class Array
         return s;
     }
 
+    // fold of op over axis (negative counts from the end), starting from init
+    template <class Op>
+    Array reduce(py::ssize_t axis, double init, Op op) const
+    {
+        const auto nd = static_cast<py::ssize_t>(shape_.size());
+        if (axis < 0)
+            axis += nd;
+        if (axis < 0 || axis >= nd)
+            throw py::index_error("axis out of bounds");
+        const auto ax = static_cast<std::size_t>(axis);
+        std::size_t outer = 1, inner = 1;
+        for (std::size_t d = 0; d < ax; ++d) outer *= static_cast<std::size_t>(shape_[d]);
+        for (std::size_t d = ax + 1; d < shape_.size(); ++d)
+            inner *= static_cast<std::size_t>(shape_[d]);
+        const auto n = static_cast<std::size_t>(shape_[ax]);
+        std::vector<T> r(outer * inner, T(init));
+        for (std::size_t o = 0; o < outer; ++o)
+            for (std::size_t j = 0; j < n; ++j)
+                for (std::size_t i = 0; i < inner; ++i)
+                    r[o * inner + i] = op(r[o * inner + i], data_[(o * n + j) * inner + i]);
+        std::vector<py::ssize_t> shape(shape_);
+        shape.erase(shape.begin() + axis);
+        return Array(std::move(shape), std::move(r));
+    }
+
+    T prod() const
+    {
+        T p = 1.0;
+        for (const T& x : data_) p *= x;
+        return p;
+    }
+
+    std::size_t size() const { return data_.size(); }
+
+    // the extent of axis (negative counts from the end, in bounds)
+    py::ssize_t axis_extent(py::ssize_t axis) const
+    {
+        const auto nd = static_cast<py::ssize_t>(shape_.size());
+        return shape_[static_cast<std::size_t>(axis < 0 ? axis + nd : axis)];
+    }
+
   private:
     Array(std::vector<py::ssize_t> shape, std::vector<T> data)
         : shape_(std::move(shape)), data_(std::move(data))
@@ -285,6 +326,37 @@ py::object array_ufunc(const py::object& /*self*/, const py::object& ufunc,
     return py::reinterpret_borrow<py::object>(Py_NotImplemented);
 }
 
+// NumPy's __array_function__: sum, prod and mean (with axis) on an Array, NotImplemented otherwise
+// (NumPy then raises TypeError)
+template <class T>
+py::object array_function(const py::object& /*self*/, const py::object& func,
+                          const py::object& /*types*/, const py::tuple& args,
+                          const py::dict& kwargs)
+{
+    const std::string name = py::str(func.attr("__name__"));
+    if ((name != "sum" && name != "prod" && name != "mean") || args.size() < 1 ||
+        !py::isinstance<Array<T>>(args[0]))
+        return py::reinterpret_borrow<py::object>(Py_NotImplemented);
+    const auto& a = args[0].cast<const Array<T>&>();
+    py::object axis = args.size() > 1 ? py::object(args[1]) : kwargs.attr("get")("axis");
+    if (axis.is_none())
+    {
+        if (name == "sum")
+            return py::cast(a.sum());
+        if (name == "prod")
+            return py::cast(a.prod());
+        return py::cast(T(a.sum() / static_cast<double>(a.size())));
+    }
+    const auto ax = axis.cast<py::ssize_t>();
+    if (name == "prod")
+        return py::cast(a.reduce(ax, 1.0, [](const T& p, const T& x) { return T(p * x); }));
+    auto s = a.reduce(ax, 0.0, [](const T& s, const T& x) { return T(s + x); });
+    if (name == "sum")
+        return py::cast(std::move(s));
+    const auto n = static_cast<double>(a.axis_extent(ax));
+    return py::cast(s.map([n](const T& x) { return T(x / n); }));
+}
+
 template <class T>
 void py_array(py::module_& m)
 {
@@ -299,6 +371,8 @@ void py_array(py::module_& m)
                  .def("__getitem__", &Array<T>::item, py::arg("index"),
                       py::return_value_policy::reference_internal, "the element itself, not a copy")
                  .def("sum", &Array<T>::sum, "the sum of all elements")
+                 .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
+                      py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
                  .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
                       "NumPy ufunc dispatch to XAD's elementwise math");
     py_array_binary_op(c, "__add__", "__radd__",
