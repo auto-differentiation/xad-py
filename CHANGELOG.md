@@ -25,6 +25,10 @@ C++ core it is built on.
   `pushCallback`, `clearCallbacks`, `getAndResetOutputAdjoint` and `incrementAdjoint`,
   `Real.getSlot`, `x.value = v` (`adj_1st`) and `ScopedNestedRecording`
   ([#4](https://github.com/auto-differentiation/xad-py/issues/4)).
+- External functions in `adj_1st` and `fwd_adj_2nd`: functions computed outside XAD with a
+  hand-written adjoint through `CheckpointCallback`, with
+  [samples/external_function.py](samples/external_function.py)
+  ([#5](https://github.com/auto-differentiation/xad-py/issues/5)).
 
 ### Changed
 
