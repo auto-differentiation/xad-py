@@ -49,30 +49,6 @@ class PyCheckpointCallback : public xad::CheckpointCallback<Tape>
     }
 };
 
-// read access to a tape's private list of inserted checkpoints (explicit instantiations may
-// name private members), to release the Python callbacks XAD no longer references
-template <class Tape>
-struct TapeCheckpoints
-{
-    using type = std::vector<
-        std::pair<typename Tape::position_type, xad::CheckpointCallback<Tape> *>> Tape::*;
-    static type member;
-};
-template <class Tape>
-typename TapeCheckpoints<Tape>::type TapeCheckpoints<Tape>::member;
-
-template <class Tape, typename TapeCheckpoints<Tape>::type M>
-struct TapeCheckpointsAccess
-{
-    static const bool init;
-};
-template <class Tape, typename TapeCheckpoints<Tape>::type M>
-const bool TapeCheckpointsAccess<Tape, M>::init = (TapeCheckpoints<Tape>::member = M, true);
-
-template struct TapeCheckpointsAccess<xad::Tape<double>, &xad::Tape<double>::checkpoints_>;
-template struct TapeCheckpointsAccess<xad::fwd_adj<double>::tape_type,
-                                      &xad::fwd_adj<double>::tape_type::checkpoints_>;
-
 // Python references to the callbacks handed to a tape with pushCallback or insertCallback,
 // keyed by tape. XAD deletes the pointers it owns, but Python callbacks are owned by their
 // Python objects, so they are kept here instead of in XAD's list. Inserted callbacks are
@@ -106,7 +82,7 @@ class PyOwnedCallbacks
         if (it == store().end() || it->second.inserted.empty())
             return;
         std::unordered_set<const Callback *> live;
-        for (const auto &c : tape.*TapeCheckpoints<Tape>::member)
+        for (const auto &c : tape.getCheckpoints())
             live.insert(c.second);
         std::vector<std::pair<Callback *, py::object>> kept;
         for (auto &e : it->second.inserted)
