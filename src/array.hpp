@@ -85,6 +85,24 @@ class Array
         return data_[static_cast<std::size_t>(i)];
     }
 
+    // the element at a full index (one int per dimension, negative counts from the end)
+    T& item(const py::tuple& index)
+    {
+        if (index.size() != shape_.size())
+            throw py::index_error("array index must have one int per dimension");
+        std::size_t flat = 0;
+        for (std::size_t d = 0; d < shape_.size(); ++d)
+        {
+            auto i = index[d].cast<py::ssize_t>();
+            if (i < 0)
+                i += shape_[d];
+            if (i < 0 || i >= shape_[d])
+                throw py::index_error("array index out of range");
+            flat = flat * static_cast<std::size_t>(shape_[d]) + static_cast<std::size_t>(i);
+        }
+        return data_[flat];
+    }
+
     // elementwise op(a_i, b_i), broadcasting the shapes as NumPy does
     template <class Op>
     Array map(const Array& b, Op op) const
@@ -406,21 +424,25 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
 template <class T>
 void py_array(py::module_& m)
 {
-    auto c = py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
-                 .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
-                      "an array from a float array or (nested) sequence of floats")
-                 .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
-                 .def_property_readonly("values", &Array<T>::values,
-                                        "the values of the elements as a float array")
-                 .def_property_readonly("derivatives", &Array<T>::derivatives,
-                                        "the derivatives of the elements as a float array")
-                 .def("__getitem__", &Array<T>::item, py::arg("index"),
-                      py::return_value_policy::reference_internal, "the element itself, not a copy")
-                 .def("sum", &Array<T>::sum, "the sum of all elements")
-                 .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
-                      py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
-                 .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
-                      "NumPy ufunc dispatch to XAD's elementwise math");
+    auto c =
+        py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
+            .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
+                 "an array from a float array or (nested) sequence of floats")
+            .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
+            .def_property_readonly("values", &Array<T>::values,
+                                   "the values of the elements as a float array")
+            .def_property_readonly("derivatives", &Array<T>::derivatives,
+                                   "the derivatives of the elements as a float array")
+            .def("__getitem__", py::overload_cast<py::ssize_t>(&Array<T>::item), py::arg("index"),
+                 py::return_value_policy::reference_internal, "the element itself, not a copy")
+            .def("__getitem__", py::overload_cast<const py::tuple&>(&Array<T>::item),
+                 py::arg("index"), py::return_value_policy::reference_internal,
+                 "the element at a full index itself, not a copy")
+            .def("sum", &Array<T>::sum, "the sum of all elements")
+            .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
+                 py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
+            .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
+                 "NumPy ufunc dispatch to XAD's elementwise math");
     py_array_binary_op(c, "__add__", "__radd__",
                        [](const auto& x, const auto& y) { return T(x + y); });
     py_array_binary_op(c, "__sub__", "__rsub__",
