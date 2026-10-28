@@ -59,6 +59,8 @@ endif()
 pybind11_add_module(
   _xad
   module.cpp
+  array.cpp
+  array.hpp
   math.hpp
   cmath.hpp
   tape.hpp
