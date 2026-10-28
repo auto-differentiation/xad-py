@@ -238,6 +238,47 @@ class Array
             });
     }
 
+    // a view broadcast to shape as NumPy's broadcast_to (stride 0 along stretched dimensions)
+    Array broadcast_to(const std::vector<py::ssize_t>& shape) const
+    {
+        const std::size_t nd = shape.size();
+        if (shape_.size() > nd)
+            throw py::value_error("operands could not be broadcast together");
+        Array v(*this);
+        v.shape_ = shape;
+        v.strides_.assign(nd, 0);
+        const std::size_t lead = nd - shape_.size();
+        for (std::size_t d = 0; d < shape_.size(); ++d)
+        {
+            if (shape_[d] == shape[lead + d])
+                v.strides_[lead + d] = strides_[d];
+            else if (shape_[d] != 1)
+                throw py::value_error("operands could not be broadcast together");
+        }
+        return v;
+    }
+
+    // the elements of x where cond holds, of y elsewhere (all of this shape)
+    template <class Cond>
+    static Array select(const std::vector<py::ssize_t>& shape, const Cond& cond, const Array& x,
+                        const Array& y)
+    {
+        const Array xb = x.broadcast_to(shape), yb = y.broadcast_to(shape);
+        std::size_t n = 1;
+        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
+        std::vector<T> r(n);
+        xb.visit(
+            [&](auto ex)
+            {
+                yb.visit(
+                    [&](auto ey)
+                    {
+                        for (std::size_t i = 0; i < n; ++i) r[i] = cond[i] ? ex(i) : ey(i);
+                    });
+            });
+        return Array(shape, std::move(r));
+    }
+
     // f(element) for every element in C order
     template <class F>
     void for_each(F f)
@@ -688,6 +729,18 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
         return array_or_scalar(
             a.template cast<const Array<T>&>().matmul(b.template cast<const Array<T>&>()));
     }
+    if (name == "where" && args.size() == 3 && kwargs.size() == 0)
+    {
+        const auto x = array_operand<T>(args[1]), y = array_operand<T>(args[2]);
+        const auto& xa = x.template cast<const Array<T>&>();
+        const auto& ya = y.template cast<const Array<T>&>();
+        const auto np = py::module_::import("numpy");
+        const py::object shape =
+            np.attr("broadcast_shapes")(np.attr("shape")(args[0]), xa.shape(), ya.shape());
+        const auto cond = py::array_t<bool, py::array::c_style | py::array::forcecast>(
+            np.attr("broadcast_to")(args[0], shape));
+        return py::cast(Array<T>::select(shape_argument(shape), cond.data(), xa, ya));
+    }
     if (name == "reshape" && args.size() == 2 && kwargs.size() == 0 &&
         py::isinstance<Array<T>>(args[0]))
         return py::cast(args[0].cast<const Array<T>&>().reshape(shape_argument(args[1])));
@@ -773,6 +826,17 @@ py::class_<Array<T>> py_array(py::module_& m)
                       py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
                  .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
                       "NumPy ufunc dispatch to XAD's elementwise math");
+    // comparisons on the values (passive): a NumPy bool array
+    const auto compare = [](const char* op)
+    {
+        return [op](const Array<T>& a, const py::object& other) -> py::object
+        {
+            const auto b = array_operand<T>(other);
+            return a.values().attr(op)(b.template cast<const Array<T>&>().values());
+        };
+    };
+    for (const char* op : {"__lt__", "__le__", "__gt__", "__ge__", "__eq__", "__ne__"})
+        c.def(op, compare(op), py::is_operator());
     py_array_binary_op(c, "__add__", "__radd__",
                        [](const auto& x, const auto& y) { return T(x + y); });
     py_array_binary_op(c, "__sub__", "__rsub__",
