@@ -280,6 +280,40 @@ class Array
         return Array(shape, std::move(r));
     }
 
+    // the arrays joined along axis (in bounds), as NumPy's concatenate: a copy
+    static Array concatenate(const std::vector<const Array*>& arrays, std::size_t axis)
+    {
+        if (arrays.empty())
+            throw py::value_error("need at least one array to concatenate");
+        std::vector<py::ssize_t> shape = arrays[0]->shape_;
+        if (shape.empty())
+            throw py::value_error("zero-dimensional arrays cannot be concatenated");
+        shape[axis] = 0;
+        for (const Array* a : arrays)
+        {
+            bool fits = a->shape_.size() == shape.size();
+            for (std::size_t d = 0; fits && d < shape.size(); ++d)
+                fits = d == axis || a->shape_[d] == shape[d];
+            if (!fits)
+                throw py::value_error(
+                    "all the input array dimensions except for the concatenation axis must match");
+            shape[axis] += a->shape_[axis];
+        }
+        std::size_t n = 1;
+        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
+        Array r(shape, std::vector<T>(n));
+        py::ssize_t start = 0;
+        for (const Array* a : arrays)
+        {
+            Array part(r);
+            part.offset_ = start * r.strides_[axis];
+            part.shape_[axis] = a->shape_[axis];
+            part.assign(*a);
+            start += a->shape_[axis];
+        }
+        return r;
+    }
+
     // f(element) for every element in C order
     template <class F>
     void for_each(F f)
@@ -750,6 +784,35 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
         const auto cond = py::array_t<bool, py::array::c_style | py::array::forcecast>(
             np.attr("broadcast_to")(args[0], shape));
         return py::cast(Array<T>::select(shape_argument(shape), cond.data(), xa, ya));
+    }
+    if (name == "concatenate" && args.size() >= 1 && args.size() <= 2)
+    {
+        for (const auto& kv : kwargs)
+            if (std::string(py::str(kv.first)) != "axis")
+                return unsupported;
+        const py::object axis =
+            args.size() > 1 ? py::object(args[1]) : kwargs.attr("get")("axis", 0);
+        std::vector<py::object> operands;
+        for (const auto& o : args[0])
+        {
+            auto a = array_operand<T>(o);
+            if (axis.is_none())
+                a = py::cast(a.template cast<const Array<T>&>().reshape({-1}));
+            operands.push_back(a);
+        }
+        std::vector<const Array<T>*> arrays;
+        for (const auto& o : operands) arrays.push_back(&o.template cast<const Array<T>&>());
+        const std::size_t nd = arrays.empty() ? 0 : arrays[0]->ndim();
+        std::size_t ax = 0;
+        if (!axis.is_none())
+        {
+            const auto d = axis.cast<py::ssize_t>();
+            const auto n = static_cast<py::ssize_t>(nd);
+            if (n > 0 && (d < -n || d >= n))
+                throw_axis_error(d, nd);
+            ax = static_cast<std::size_t>(d < 0 ? d + n : d);
+        }
+        return py::cast(Array<T>::concatenate(arrays, ax));
     }
     if (name == "reshape" && args.size() == 2 && kwargs.size() == 0 &&
         py::isinstance<Array<T>>(args[0]))
