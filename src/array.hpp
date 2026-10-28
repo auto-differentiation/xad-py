@@ -49,6 +49,9 @@ class Array
     {
     }
 
+    // a 0-d array holding x (an active scalar operand, broadcast like a NumPy scalar)
+    explicit Array(const T& x) : data_{x} {}
+
     py::tuple shape() const
     {
         py::tuple t(shape_.size());
@@ -240,12 +243,15 @@ T (*array_binary_function(const std::string& name))(const T&, const T&)
     return it == functions.end() ? nullptr : it->second;
 }
 
-// a ufunc operand as an Array: itself (no copy), or one from a float array or float
+// a ufunc operand as an Array: itself (no copy), a 0-d one holding a Real (active, never through
+// __float__), or one from a float array or float
 template <class T>
 py::object array_operand(const py::handle& o)
 {
     if (py::isinstance<Array<T>>(o))
         return py::reinterpret_borrow<py::object>(o);
+    if (py::isinstance<T>(o))
+        return py::cast(Array<T>(o.cast<const T&>()));
     return py::cast(Array<T>(py::cast<typename Array<T>::float_array>(o)));
 }
 
