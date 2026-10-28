@@ -665,7 +665,7 @@ py::object array_or_scalar(Array<T> r)
 }
 
 // a ufunc operand as an Array: itself (no copy), a 0-d one holding a Real (active, never through
-// __float__), or one from a float array or float
+// __float__), or one from a float array or float; TypeError for object arrays
 template <class T>
 py::object array_operand(const py::handle& o)
 {
@@ -673,7 +673,11 @@ py::object array_operand(const py::handle& o)
         return py::reinterpret_borrow<py::object>(o);
     if (py::isinstance<T>(o))
         return py::cast(Array<T>(o.cast<const T&>()));
-    return py::cast(Array<T>(py::cast<typename Array<T>::float_array>(o)));
+    // object elements (e.g. Reals) would go through __float__, dropping their derivatives
+    const auto a = py::array::ensure(o);
+    if (!a || a.dtype().kind() == 'O')
+        throw py::type_error("operand must be an Array, Real, float or float array, not objects");
+    return py::cast(Array<T>(py::cast<typename Array<T>::float_array>(a)));
 }
 
 // NumPy's __array_ufunc__: plain calls of the unary and binary ufuncs with an XAD counterpart,
@@ -759,6 +763,27 @@ inline std::vector<py::ssize_t> shape_argument(const py::handle& shape)
     std::vector<py::ssize_t> r;
     for (const auto& e : shape) r.push_back(e.cast<py::ssize_t>());
     return r;
+}
+
+// NumPy's __array__: the values as floats, or for dtype=object the elements themselves (Reals)
+template <class T>
+py::object array_array(const py::object& self, const py::object& dtype, const py::object& /*copy*/)
+{
+    auto& a = self.cast<Array<T>&>();
+    const auto np = py::module_::import("numpy");
+    const bool objects =
+        !dtype.is_none() && std::string(py::str(np.attr("dtype")(dtype).attr("kind"))) == "O";
+    if (!objects)
+    {
+        py::object values = a.values();
+        return dtype.is_none() ? values : values.attr("astype")(dtype);
+    }
+    py::object out = np.attr("empty")(a.size(), py::arg("dtype") = "object");
+    py::ssize_t i = 0;
+    a.for_each(
+        [&](T& x)
+        { out[py::int_(i++)] = py::cast(&x, py::return_value_policy::reference_internal, self); });
+    return out.attr("reshape")(a.shape());
 }
 
 // NumPy's __array_function__: sum, prod and mean (with axis, keepdims) on an Array,
@@ -898,6 +923,9 @@ py::class_<Array<T>> py_array(py::module_& m)
                      "__matmul__", [](const Array<T>& a, const Array<T>& b)
                      { return array_or_scalar(a.matmul(b)); }, py::is_operator(),
                      "matrix product of 1-d and 2-d arrays")
+                 .def("__array__", &array_array<T>, py::arg("dtype") = py::none(),
+                      py::arg("copy") = py::none(),
+                      "the values as a float array, or the elements themselves for dtype=object")
                  .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
                       py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
                  .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
