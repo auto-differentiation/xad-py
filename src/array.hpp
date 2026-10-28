@@ -210,6 +210,34 @@ class Array
         return Array(std::move(shape), std::move(r));
     }
 
+    // matrix product of 1-d and 2-d arrays as NumPy's matmul: a 1-d left operand is a row, a 1-d
+    // right operand a column, and their dimension is dropped from the result
+    Array matmul(const Array& b) const
+    {
+        if (shape_.empty() || shape_.size() > 2 || b.shape_.empty() || b.shape_.size() > 2)
+            throw py::type_error("matmul supports 1-d and 2-d arrays only");
+        const std::size_t m = shape_.size() == 2 ? static_cast<std::size_t>(shape_[0]) : 1;
+        const auto k = static_cast<std::size_t>(shape_.back());
+        const auto kb = static_cast<std::size_t>(b.shape_[0]);
+        const std::size_t n = b.shape_.size() == 2 ? static_cast<std::size_t>(b.shape_[1]) : 1;
+        if (k != kb)
+            throw py::value_error("matmul: mismatch in the core dimension");
+        std::vector<T> r(m * n, T(0.0));
+        for (std::size_t i = 0; i < m; ++i)
+            for (std::size_t j = 0; j < n; ++j)
+            {
+                T s = 0.0;
+                for (std::size_t l = 0; l < k; ++l) s += data_[i * k + l] * b.data_[l * n + j];
+                r[i * n + j] = s;
+            }
+        std::vector<py::ssize_t> shape;
+        if (shape_.size() == 2)
+            shape.push_back(shape_[0]);
+        if (b.shape_.size() == 2)
+            shape.push_back(b.shape_[1]);
+        return Array(std::move(shape), std::move(r));
+    }
+
   private:
     Array(std::vector<py::ssize_t> shape, std::vector<T> data)
         : shape_(std::move(shape)), data_(std::move(data))
@@ -309,6 +337,15 @@ T (*array_binary_function(const std::string& name))(const T&, const T&)
     return it == functions.end() ? nullptr : it->second;
 }
 
+// a result as NumPy returns it: a Real for 0-d, the Array otherwise
+template <class T>
+py::object array_or_scalar(Array<T> r)
+{
+    if (r.ndim() == 0)
+        return py::cast(T(r.item(0)));
+    return py::cast(std::move(r));
+}
+
 // a ufunc operand as an Array: itself (no copy), a 0-d one holding a Real (active, never through
 // __float__), or one from a float array or float
 template <class T>
@@ -338,6 +375,12 @@ py::object array_ufunc(const py::object& /*self*/, const py::object& ufunc,
             const auto a = array_operand<T>(inputs[0]);
             return py::cast(a.template cast<const Array<T>&>().map(f));
         }
+    }
+    else if (inputs.size() == 2 && name == "matmul")
+    {
+        const auto a = array_operand<T>(inputs[0]), b = array_operand<T>(inputs[1]);
+        return array_or_scalar(
+            a.template cast<const Array<T>&>().matmul(b.template cast<const Array<T>&>()));
     }
     else if (inputs.size() == 2)
     {
@@ -387,6 +430,12 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
 {
     const auto unsupported = py::reinterpret_borrow<py::object>(Py_NotImplemented);
     const std::string name = py::str(func.attr("__name__"));
+    if (name == "dot" && args.size() == 2 && kwargs.size() == 0)
+    {
+        const auto a = array_operand<T>(args[0]), b = array_operand<T>(args[1]);
+        return array_or_scalar(
+            a.template cast<const Array<T>&>().matmul(b.template cast<const Array<T>&>()));
+    }
     if ((name != "sum" && name != "prod" && name != "mean") || args.size() < 1 || args.size() > 2 ||
         !py::isinstance<Array<T>>(args[0]))
         return unsupported;
@@ -416,9 +465,7 @@ py::object array_function(const py::object& /*self*/, const py::object& func,
         const auto n = static_cast<double>(count);
         r = r.map([n](const T& x) { return T(x / n); });
     }
-    if (r.ndim() == 0)
-        return py::cast(T(r.item(0)));
-    return py::cast(std::move(r));
+    return array_or_scalar(std::move(r));
 }
 
 template <class T>
@@ -439,6 +486,10 @@ void py_array(py::module_& m)
                  py::arg("index"), py::return_value_policy::reference_internal,
                  "the element at a full index itself, not a copy")
             .def("sum", &Array<T>::sum, "the sum of all elements")
+            .def(
+                "__matmul__",
+                [](const Array<T>& a, const Array<T>& b) { return array_or_scalar(a.matmul(b)); },
+                py::is_operator(), "matrix product of 1-d and 2-d arrays")
             .def("__array_function__", &array_function<T>, py::arg("func"), py::arg("types"),
                  py::arg("args"), py::arg("kwargs"), "NumPy function dispatch to XAD loops")
             .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
