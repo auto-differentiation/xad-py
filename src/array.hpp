@@ -27,10 +27,10 @@
 #include <XAD/XAD.hpp>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include "double_caster.hpp"
 #include <cstddef>
 #include <utility>
 #include <vector>
-#include "double_caster.hpp"
 
 namespace py = pybind11;
 
@@ -49,8 +49,7 @@ class Array
     py::tuple shape() const
     {
         py::tuple t(shape_.size());
-        for (std::size_t i = 0; i < shape_.size(); ++i)
-            t[i] = shape_[i];
+        for (std::size_t i = 0; i < shape_.size(); ++i) t[i] = shape_[i];
         return t;
     }
 
@@ -58,8 +57,7 @@ class Array
     {
         float_array out(shape_);
         double* p = out.mutable_data();
-        for (const T& x : data_)
-            *p++ = xad::value(x);
+        for (const T& x : data_) *p++ = xad::value(x);
         return out;
     }
 
@@ -67,8 +65,7 @@ class Array
     {
         float_array out(shape_);
         double* p = out.mutable_data();
-        for (const T& x : data_)
-            *p++ = x.getDerivative();
+        for (const T& x : data_) *p++ = x.getDerivative();
         return out;
     }
 
@@ -82,21 +79,30 @@ class Array
         return data_[static_cast<std::size_t>(i)];
     }
 
-    Array operator*(const Array& b) const
+    // elementwise op(a_i, b_i), same shapes
+    template <class Op>
+    Array map(const Array& b, Op op) const
     {
         if (shape_ != b.shape_)
             throw py::value_error("operands could not be broadcast together");
         std::vector<T> r(data_.size());
-        for (std::size_t i = 0; i < data_.size(); ++i)
-            r[i] = data_[i] * b.data_[i];
+        for (std::size_t i = 0; i < data_.size(); ++i) r[i] = op(data_[i], b.data_[i]);
+        return Array(shape_, std::move(r));
+    }
+
+    // elementwise op(a_i)
+    template <class Op>
+    Array map(Op op) const
+    {
+        std::vector<T> r(data_.size());
+        for (std::size_t i = 0; i < data_.size(); ++i) r[i] = op(data_[i]);
         return Array(shape_, std::move(r));
     }
 
     T sum() const
     {
         T s = 0.0;
-        for (const T& x : data_)
-            s += x;
+        for (const T& x : data_) s += x;
         return s;
     }
 
@@ -110,19 +116,47 @@ class Array
     std::vector<T> data_;
 };
 
+// the operator and its reflected form with an Array, Real or float/int operand
+template <class T, class Op>
+void py_array_binary_op(py::class_<Array<T>>& c, const char* name, const char* rname, Op op)
+{
+    using A = Array<T>;
+    c.def(
+         name, [op](const A& a, const A& b) { return a.map(b, op); }, py::is_operator())
+        .def(
+            name, [op](const A& a, const T& y)
+            { return a.map([&](const T& x) -> T { return op(x, y); }); }, py::is_operator())
+        .def(
+            name, [op](const A& a, double y)
+            { return a.map([&](const T& x) -> T { return op(x, y); }); }, py::is_operator())
+        .def(
+            rname, [op](const A& a, const T& y)
+            { return a.map([&](const T& x) -> T { return op(y, x); }); }, py::is_operator())
+        .def(
+            rname, [op](const A& a, double y)
+            { return a.map([&](const T& x) -> T { return op(y, x); }); }, py::is_operator());
+}
+
 template <class T>
 void py_array(py::module_& m)
 {
-    py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
-        .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
-             "an array from a float array or (nested) sequence of floats")
-        .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
-        .def_property_readonly("values", &Array<T>::values,
-                               "the values of the elements as a float array")
-        .def_property_readonly("derivatives", &Array<T>::derivatives,
-                               "the derivatives of the elements as a float array")
-        .def("__getitem__", &Array<T>::item, py::arg("index"),
-             py::return_value_policy::reference_internal, "the element itself, not a copy")
-        .def("__mul__", &Array<T>::operator*, py::is_operator())
-        .def("sum", &Array<T>::sum, "the sum of all elements");
+    auto c = py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
+                 .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
+                      "an array from a float array or (nested) sequence of floats")
+                 .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
+                 .def_property_readonly("values", &Array<T>::values,
+                                        "the values of the elements as a float array")
+                 .def_property_readonly("derivatives", &Array<T>::derivatives,
+                                        "the derivatives of the elements as a float array")
+                 .def("__getitem__", &Array<T>::item, py::arg("index"),
+                      py::return_value_policy::reference_internal, "the element itself, not a copy")
+                 .def("sum", &Array<T>::sum, "the sum of all elements");
+    py_array_binary_op(c, "__add__", "__radd__",
+                       [](const auto& x, const auto& y) { return T(x + y); });
+    py_array_binary_op(c, "__sub__", "__rsub__",
+                       [](const auto& x, const auto& y) { return T(x - y); });
+    py_array_binary_op(c, "__mul__", "__rmul__",
+                       [](const auto& x, const auto& y) { return T(x * y); });
+    py_array_binary_op(c, "__truediv__", "__rtruediv__",
+                       [](const auto& x, const auto& y) { return T(x / y); });
 }
