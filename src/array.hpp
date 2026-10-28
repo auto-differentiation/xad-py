@@ -224,16 +224,57 @@ T (*array_unary_function(const std::string& name))(const T&)
     return it == functions.end() ? nullptr : it->second;
 }
 
-// NumPy's __array_ufunc__: the unary ufuncs with an XAD counterpart, NotImplemented otherwise
-// (NumPy then raises TypeError)
+// the elementwise XAD operation for a binary NumPy ufunc name, nullptr if there is none
 template <class T>
-py::object array_ufunc(const Array<T>& self, const py::object& ufunc, const std::string& /*method*/,
-                       const py::args& /*inputs*/, const py::kwargs& /*kwargs*/)
+T (*array_binary_function(const std::string& name))(const T&, const T&)
 {
-    auto f = array_unary_function<T>(py::str(ufunc.attr("__name__")));
-    if (!f)
-        return py::reinterpret_borrow<py::object>(Py_NotImplemented);
-    return py::cast(self.map(f));
+    using F = T (*)(const T&, const T&);
+    static const std::map<std::string, F> functions = {
+        {"add", [](const T& x, const T& y) { return T(x + y); }},
+        {"subtract", [](const T& x, const T& y) { return T(x - y); }},
+        {"multiply", [](const T& x, const T& y) { return T(x * y); }},
+        {"divide", [](const T& x, const T& y) { return T(x / y); }},
+        {"power", [](const T& x, const T& y) { return T(xad::pow(x, y)); }},
+    };
+    auto it = functions.find(name);
+    return it == functions.end() ? nullptr : it->second;
+}
+
+// a ufunc operand as an Array: itself (no copy), or one from a float array or float
+template <class T>
+py::object array_operand(const py::handle& o)
+{
+    if (py::isinstance<Array<T>>(o))
+        return py::reinterpret_borrow<py::object>(o);
+    return py::cast(Array<T>(py::cast<typename Array<T>::float_array>(o)));
+}
+
+// NumPy's __array_ufunc__: the unary and binary ufuncs with an XAD counterpart, NotImplemented
+// otherwise (NumPy then raises TypeError)
+template <class T>
+py::object array_ufunc(const py::object& /*self*/, const py::object& ufunc,
+                       const std::string& /*method*/, const py::args& inputs,
+                       const py::kwargs& /*kwargs*/)
+{
+    const std::string name = py::str(ufunc.attr("__name__"));
+    if (inputs.size() == 1)
+    {
+        if (auto f = array_unary_function<T>(name))
+        {
+            const auto a = array_operand<T>(inputs[0]);
+            return py::cast(a.template cast<const Array<T>&>().map(f));
+        }
+    }
+    else if (inputs.size() == 2)
+    {
+        if (auto f = array_binary_function<T>(name))
+        {
+            const auto a = array_operand<T>(inputs[0]), b = array_operand<T>(inputs[1]);
+            return py::cast(
+                a.template cast<const Array<T>&>().map(b.template cast<const Array<T>&>(), f));
+        }
+    }
+    return py::reinterpret_borrow<py::object>(Py_NotImplemented);
 }
 
 template <class T>
