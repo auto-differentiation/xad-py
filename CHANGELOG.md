@@ -29,6 +29,12 @@ C++ core it is built on.
   hand-written adjoint through `CheckpointCallback`, with
   [samples/external_function.py](samples/external_function.py)
   ([#5](https://github.com/auto-differentiation/xad-py/issues/5)).
+- NumPy arrays: `Array` in `adj_1st` and `fwd_1st`, n-dimensional arrays of active values in
+  C++ with elementwise operators and ufuncs, broadcasting, `sum`/`prod`/`mean`, `@`/`dot`,
+  `where`, `concatenate`, views for indexing, slicing and `reshape`, and
+  `Tape.registerInputs`/`registerOutputs` on arrays, with
+  [samples/numpy_arrays.py](samples/numpy_arrays.py)
+  ([#6](https://github.com/auto-differentiation/xad-py/issues/6)).
 
 ### Changed
 
