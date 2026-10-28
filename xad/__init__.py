@@ -24,10 +24,41 @@
 
 """Python bindings for the XAD comprehensive library for automatic differentiation"""
 
+import os
+import sys
 from typing import Any, Union
-from ._xad import adj_1st, fwd_1st, __version__
 
-__all__ = ["value", "derivative", "__version__"]
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+
+if sys.platform == "win32":
+    # xad.dll, for extensions linking it from elsewhere
+    _dll_dir = os.add_dll_directory(_PKG_DIR)
+
+from ._xad import adj_1st, fwd_1st, __version__  # noqa: E402
+
+__all__ = [
+    "value",
+    "derivative",
+    "get_include",
+    "get_cmake_dir",
+    "get_library_dir",
+    "__version__",
+]
+
+
+def get_include() -> str:
+    """Directory with the XAD C++ headers (``XAD/XAD.hpp``)"""
+    return os.path.join(_PKG_DIR, "include")
+
+
+def get_cmake_dir() -> str:
+    """Directory with ``XADConfig.cmake``, for ``find_package(XAD CONFIG)`` via ``XAD_DIR``"""
+    return os.path.join(_PKG_DIR, "share", "cmake", "XAD")
+
+
+def get_library_dir() -> str:
+    """Directory with the XAD library (import library on Windows, ``xad.dll`` is in the package)"""
+    return os.path.join(_PKG_DIR, "lib")
 
 
 def value(x: Union[adj_1st.Real, fwd_1st.Real, Any]) -> float:

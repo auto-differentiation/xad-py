@@ -8,6 +8,19 @@ The package version follows the [XAD](https://github.com/auto-differentiation/xa
 C++ core it is built on.
 
 
+## [unreleased]
+
+### Added
+
+- XAD as a shared library in the package, with headers and CMake config, for building
+  extensions sharing the tape (`xad.get_include()`, `xad.get_cmake_dir()`,
+  `xad.get_library_dir()`).
+
+### Changed
+
+- Thread-local tapes: each thread has its own active tape.
+- Dynamic MSVC runtime on Windows.
+
 ## [2.1.0] - 2026-10-24
 
 ### Added

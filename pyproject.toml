@@ -91,6 +91,8 @@ dev = [{ include-group = "test" }, { include-group = "lint" }, "pre-commit"]
 minimum-version = "build-system.requires"
 cmake.version = ">=3.18"
 wheel.packages = ["xad"]
+# only our install rules, not those of the XAD submodule
+install.components = ["python"]
 # submodule parts not needed to build
 sdist.exclude = [
     ".github",
@@ -108,6 +110,17 @@ skip = ["cp3??t-*", "cp315-*"]  # CPython 3.10-3.14, no free-threaded
 build-verbosity = 2
 test-groups = ["test"]
 test-command = "pytest {project}/tests"
+
+# libxad is shipped in xad/lib (xad/xad.dll on Windows), keep it the only copy
+[tool.cibuildwheel.linux]
+repair-wheel-command = "auditwheel repair --exclude libxad.so -w {dest_dir} {wheel}"
+
+[tool.cibuildwheel.macos]
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} --exclude libxad.dylib -w {dest_dir} -v {wheel}"
+
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair --exclude xad.dll -w {dest_dir} {wheel}"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
