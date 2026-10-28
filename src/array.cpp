@@ -22,8 +22,9 @@
 
 ******************************************************************************/
 
-#include "array.hpp"
 #include "double_caster.hpp"  // first: must precede any double caster use
+
+#include "array.hpp"
 
 void py_array_adj_1st(py::module_& m)
 {

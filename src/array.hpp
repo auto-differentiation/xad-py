@@ -25,9 +25,10 @@
 #pragma once
 
 #include <XAD/XAD.hpp>
-#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
-#include "double_caster.hpp"
+#include "double_caster.hpp"  // first: must precede any double caster use
+
+#include <pybind11/numpy.h>
 #include <algorithm>
 #include <cstddef>
 #include <map>
