@@ -98,7 +98,7 @@ class Array
             const py::ssize_t na = extent(nd, d), nb = b.extent(nd, d);
             if (na != nb && na != 1 && nb != 1)
                 throw py::value_error("operands could not be broadcast together");
-            shape[d] = na == 1 ? nb : na;
+            shape[d] = std::max(na, nb);
         }
         std::size_t n = 1;
         for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
