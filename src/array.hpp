@@ -62,6 +62,22 @@ class Array
         return out;
     }
 
+    float_array derivatives() const
+    {
+        float_array out(shape_);
+        double* p = out.mutable_data();
+        for (const T& x : data_)
+            *p++ = x.getDerivative();
+        return out;
+    }
+
+    T& item(py::ssize_t i)
+    {
+        if (i < 0 || i >= static_cast<py::ssize_t>(data_.size()))
+            throw py::index_error("array index out of range");
+        return data_[static_cast<std::size_t>(i)];
+    }
+
   private:
     std::vector<py::ssize_t> shape_;
     std::vector<T> data_;
@@ -75,5 +91,9 @@ void py_array(py::module_& m)
              "an array from a float array or (nested) sequence of floats")
         .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
         .def_property_readonly("values", &Array<T>::values,
-                               "the values of the elements as a float array");
+                               "the values of the elements as a float array")
+        .def_property_readonly("derivatives", &Array<T>::derivatives,
+                               "the derivatives of the elements as a float array")
+        .def("__getitem__", &Array<T>::item, py::arg("index"),
+             py::return_value_policy::reference_internal, "the element itself, not a copy");
 }
