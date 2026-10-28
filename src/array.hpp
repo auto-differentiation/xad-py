@@ -659,6 +659,15 @@ py::object array_ufunc(const py::object& /*self*/, const py::object& ufunc,
             return py::cast(a.template cast<const Array<T>&>().map(f));
         }
     }
+    else if (inputs.size() == 2 &&
+             (name == "less" || name == "less_equal" || name == "greater" ||
+              name == "greater_equal" || name == "equal" || name == "not_equal"))
+    {
+        // comparisons on the values (passive)
+        const auto a = array_operand<T>(inputs[0]), b = array_operand<T>(inputs[1]);
+        return ufunc(a.template cast<const Array<T>&>().values(),
+                     b.template cast<const Array<T>&>().values());
+    }
     else if (inputs.size() == 2 && name == "matmul")
     {
         const auto a = array_operand<T>(inputs[0]), b = array_operand<T>(inputs[1]);
