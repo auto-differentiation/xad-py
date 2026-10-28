@@ -100,43 +100,80 @@ class Array
     // the element of a 0-d array (view)
     T& element() const { return (*data_)[static_cast<std::size_t>(offset_)]; }
 
-    // NumPy basic indexing with an int, a slice or a tuple of them: a view, 0-d when every
-    // dimension is indexed by an int
+    // NumPy basic indexing with ints, slices, Ellipsis and None (newaxis), alone or in a tuple: a
+    // view, 0-d when every dimension is indexed by an int; advanced indices raise IndexError
     Array view(const py::object& index) const
     {
         const py::tuple idx =
             py::isinstance<py::tuple>(index) ? index.cast<py::tuple>() : py::make_tuple(index);
-        if (idx.size() > shape_.size())
+        // the dimensions the ints and slices index, and where the Ellipsis is
+        std::size_t indexed = 0, ellipsis = idx.size();
+        for (std::size_t k = 0; k < idx.size(); ++k)
+        {
+            const py::handle e = idx[k];
+            if (e.is(py::ellipsis()))
+            {
+                if (ellipsis != idx.size())
+                    throw py::index_error("an index can only have a single ellipsis ('...')");
+                ellipsis = k;
+            }
+            else if (!e.is_none())
+            {
+                if (!py::isinstance<py::slice>(e) && !is_int_index(e))
+                    throw py::index_error(
+                        "only integers, slices, ellipsis and None are valid index entries "
+                        "(no integer or boolean array indexing)");
+                ++indexed;
+            }
+        }
+        if (indexed > shape_.size())
             throw py::index_error("too many indices for array");
         Array v(*this);
         v.shape_.clear();
         v.strides_.clear();
-        for (std::size_t d = 0; d < shape_.size(); ++d)
+        std::size_t d = 0;
+        const auto keep = [&](std::size_t count)
         {
-            if (d >= idx.size())
+            for (; count > 0; --count, ++d)
             {
                 v.shape_.push_back(shape_[d]);
                 v.strides_.push_back(strides_[d]);
             }
-            else if (py::isinstance<py::slice>(idx[d]))
+        };
+        for (std::size_t k = 0; k < idx.size(); ++k)
+        {
+            const py::handle e = idx[k];
+            if (k == ellipsis)
+                keep(shape_.size() - indexed);
+            else if (e.is_none())
+            {
+                v.shape_.push_back(1);
+                v.strides_.push_back(0);
+            }
+            else if (py::isinstance<py::slice>(e))
             {
                 py::ssize_t start = 0, stop = 0, step = 0, length = 0;
-                if (!idx[d].cast<py::slice>().compute(shape_[d], &start, &stop, &step, &length))
+                if (!py::reinterpret_borrow<py::slice>(e).compute(shape_[d], &start, &stop, &step,
+                                                                  &length))
                     throw py::error_already_set();
                 v.offset_ += start * strides_[d];
                 v.shape_.push_back(length);
                 v.strides_.push_back(strides_[d] * step);
+                ++d;
             }
             else
             {
-                auto i = idx[d].cast<py::ssize_t>();
-                if (i < 0)
-                    i += shape_[d];
-                if (i < 0 || i >= shape_[d])
+                const py::ssize_t i = PyNumber_AsSsize_t(e.ptr(), PyExc_IndexError);
+                if (i == -1 && PyErr_Occurred())
+                    throw py::error_already_set();
+                const py::ssize_t j = i < 0 ? i + shape_[d] : i;
+                if (j < 0 || j >= shape_[d])
                     throw py::index_error("array index out of range");
-                v.offset_ += i * strides_[d];
+                v.offset_ += j * strides_[d];
+                ++d;
             }
         }
+        keep(shape_.size() - d);
         return v;
     }
 
@@ -323,6 +360,12 @@ class Array
     }
 
   private:
+    // whether e is an integer index (a Python or NumPy integer; not a bool, sequence or array)
+    static bool is_int_index(const py::handle& e)
+    {
+        return !PyBool_Check(e.ptr()) && PyIndex_Check(e.ptr()) && !py::hasattr(e, "__len__");
+    }
+
     Array(std::vector<py::ssize_t> shape, std::vector<T> data)
         : shape_(std::move(shape)),
           strides_(c_strides(shape_)),
