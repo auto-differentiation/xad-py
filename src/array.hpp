@@ -140,19 +140,62 @@ class Array
         return v;
     }
 
-    // a view with another shape of the same size (contiguous arrays only)
+    // another shape of the same size (one extent can be -1, inferred): a view for contiguous
+    // arrays, a copy otherwise (as NumPy)
     Array reshape(std::vector<py::ssize_t> shape) const
     {
-        std::size_t n = 1;
-        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
-        if (n != size())
+        std::size_t known = 1;
+        auto inferred = shape.end();
+        for (auto it = shape.begin(); it != shape.end(); ++it)
+        {
+            if (*it == -1 && inferred == shape.end())
+                inferred = it;
+            else
+                known *= static_cast<std::size_t>(*it);
+        }
+        if (inferred != shape.end() && known != 0)
+            *inferred = static_cast<py::ssize_t>(size() / known);
+        if ((inferred != shape.end() ? known * static_cast<std::size_t>(*inferred) : known) !=
+            size())
             throw py::value_error("cannot reshape array into a shape of another size");
-        if (!contiguous())
-            throw py::value_error("reshape of a non-contiguous view is not supported");
-        Array v(*this);
+        Array v = contiguous() ? *this : map([](const T& x) { return x; });
         v.strides_ = c_strides(shape);
         v.shape_ = std::move(shape);
         return v;
+    }
+
+    // assigns src to the elements, broadcasting src to their shape as NumPy does
+    void assign(const Array& src)
+    {
+        const std::size_t nd = shape_.size();
+        bool fits = src.shape_.size() <= nd;
+        for (std::size_t d = 0; fits && d < nd; ++d)
+            fits = src.extent(nd, d) == 1 || src.extent(nd, d) == shape_[d];
+        if (!fits)
+            throw py::value_error("could not broadcast the value into the indexed shape");
+        const auto ss = src.broadcast_strides(nd);
+        T* base = data_->data();
+        src.visit(
+            [&](auto e)
+            {
+                std::vector<py::ssize_t> idx(nd, 0);
+                py::ssize_t o = offset_, is = 0;
+                for (std::size_t i = 0, n = size(); i < n; ++i)
+                {
+                    base[o] = e(static_cast<std::size_t>(is));
+                    // next index, last dimension fastest
+                    for (std::size_t d = nd; d-- > 0;)
+                    {
+                        o += strides_[d];
+                        is += ss[d];
+                        if (++idx[d] < shape_[d])
+                            break;
+                        o -= strides_[d] * shape_[d];
+                        is -= ss[d] * shape_[d];
+                        idx[d] = 0;
+                    }
+                }
+            });
     }
 
     // f(element) for every element in C order
@@ -659,12 +702,21 @@ py::class_<Array<T>> py_array(py::module_& m)
                      "NumPy basic indexing: the element itself for an int per dimension, a view "
                      "otherwise")
                  .def(
-                     "__setitem__", [](const Array<T>& a, const py::object& index, double x)
-                     { a.view(index).for_each([x](T& e) { e = x; }); }, py::arg("index"),
-                     py::arg("value"), "set the indexed elements to a float")
+                     "__setitem__",
+                     [](const Array<T>& a, const py::object& index, const py::object& value)
+                     {
+                         const auto src = array_operand<T>(value);
+                         a.view(index).assign(src.template cast<const Array<T>&>());
+                     },
+                     py::arg("index"), py::arg("value"),
+                     "set the indexed elements to a float, Real or array (broadcast)")
                  .def(
-                     "reshape", [](const Array<T>& a, const py::args& shape)
-                     { return a.reshape(shape_argument(shape.size() == 1 ? shape[0] : shape)); },
+                     "reshape",
+                     [](const Array<T>& a, const py::args& shape)
+                     {
+                         return a.reshape(shape_argument(shape.size() == 1 ? py::object(shape[0])
+                                                                           : py::object(shape)));
+                     },
                      "a view with another shape")
                  .def("sum", &Array<T>::sum, "the sum of all elements")
                  .def(
