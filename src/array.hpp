@@ -28,6 +28,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include "double_caster.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -79,15 +80,47 @@ class Array
         return data_[static_cast<std::size_t>(i)];
     }
 
-    // elementwise op(a_i, b_i), same shapes
+    // elementwise op(a_i, b_i), broadcasting the shapes as NumPy does
     template <class Op>
     Array map(const Array& b, Op op) const
     {
-        if (shape_ != b.shape_)
-            throw py::value_error("operands could not be broadcast together");
-        std::vector<T> r(data_.size());
-        for (std::size_t i = 0; i < data_.size(); ++i) r[i] = op(data_[i], b.data_[i]);
-        return Array(shape_, std::move(r));
+        if (shape_ == b.shape_)
+        {
+            std::vector<T> r(data_.size());
+            for (std::size_t i = 0; i < data_.size(); ++i) r[i] = op(data_[i], b.data_[i]);
+            return Array(shape_, std::move(r));
+        }
+        const std::size_t nd = std::max(shape_.size(), b.shape_.size());
+        std::vector<py::ssize_t> shape(nd), sa = broadcast_strides(nd),
+                                            sb = b.broadcast_strides(nd);
+        for (std::size_t d = 0; d < nd; ++d)
+        {
+            const py::ssize_t na = extent(nd, d), nb = b.extent(nd, d);
+            if (na != nb && na != 1 && nb != 1)
+                throw py::value_error("operands could not be broadcast together");
+            shape[d] = na == 1 ? nb : na;
+        }
+        std::size_t n = 1;
+        for (py::ssize_t e : shape) n *= static_cast<std::size_t>(e);
+        std::vector<T> r(n);
+        std::vector<py::ssize_t> idx(nd, 0);
+        py::ssize_t ia = 0, ib = 0;
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            r[i] = op(data_[static_cast<std::size_t>(ia)], b.data_[static_cast<std::size_t>(ib)]);
+            // next index, last dimension fastest
+            for (std::size_t d = nd; d-- > 0;)
+            {
+                ia += sa[d];
+                ib += sb[d];
+                if (++idx[d] < shape[d])
+                    break;
+                ia -= sa[d] * shape[d];
+                ib -= sb[d] * shape[d];
+                idx[d] = 0;
+            }
+        }
+        return Array(std::move(shape), std::move(r));
     }
 
     // elementwise op(a_i)
@@ -110,6 +143,28 @@ class Array
     Array(std::vector<py::ssize_t> shape, std::vector<T> data)
         : shape_(std::move(shape)), data_(std::move(data))
     {
+    }
+
+    // the extent of dimension d with the shape right-aligned to nd dimensions
+    py::ssize_t extent(std::size_t nd, std::size_t d) const
+    {
+        const std::size_t offset = nd - shape_.size();
+        return d < offset ? 1 : shape_[d - offset];
+    }
+
+    // C-order element strides right-aligned to nd dimensions, 0 where the extent is 1
+    std::vector<py::ssize_t> broadcast_strides(std::size_t nd) const
+    {
+        std::vector<py::ssize_t> strides(nd, 0);
+        py::ssize_t stride = 1;
+        for (std::size_t d = nd; d-- > 0;)
+        {
+            const py::ssize_t e = extent(nd, d);
+            if (e != 1)
+                strides[d] = stride;
+            stride *= e;
+        }
+        return strides;
     }
 
     std::vector<py::ssize_t> shape_;
