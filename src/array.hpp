@@ -53,6 +53,27 @@ class Array
     {
     }
 
+    // an array from a float array, (nested) sequence of floats, or of Reals mixed with floats (the
+    // Reals stay active)
+    static Array from_object(const py::object& o)
+    {
+        const auto a = py::array::ensure(o);
+        if (!a || a.dtype().kind() != 'O')
+            return Array(py::cast<float_array>(o));
+        std::vector<T> data;
+        data.reserve(static_cast<std::size_t>(a.size()));
+        for (const auto& e : a.attr("ravel")())
+        {
+            if (py::isinstance<T>(e))
+                data.push_back(e.cast<const T&>());
+            else if (PyFloat_Check(e.ptr()) || PyLong_Check(e.ptr()))
+                data.push_back(T(e.cast<double>()));
+            else
+                throw py::type_error("array elements must be Reals or floats");
+        }
+        return Array(std::vector<py::ssize_t>(a.shape(), a.shape() + a.ndim()), std::move(data));
+    }
+
     // a 0-d array holding x (an active scalar operand, broadcast like a NumPy scalar)
     explicit Array(const T& x) : Array(std::vector<py::ssize_t>{}, std::vector<T>{x}) {}
 
@@ -881,8 +902,8 @@ template <class T>
 py::class_<Array<T>> py_array(py::module_& m)
 {
     auto c = py::class_<Array<T>>(m, "Array", "n-dimensional array of active values")
-                 .def(py::init<const typename Array<T>::float_array&>(), py::arg("values"),
-                      "an array from a float array or (nested) sequence of floats")
+                 .def(py::init(&Array<T>::from_object), py::arg("values"),
+                      "an array from a float array or (nested) sequence of floats or Reals")
                  .def_property_readonly("shape", &Array<T>::shape, "the shape of the array")
                  .def_property_readonly("values", &Array<T>::values,
                                         "the values of the elements as a float array")
