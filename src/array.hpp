@@ -73,7 +73,10 @@ class Array
 
     T& item(py::ssize_t i)
     {
-        if (i < 0 || i >= static_cast<py::ssize_t>(data_.size()))
+        const auto n = static_cast<py::ssize_t>(data_.size());
+        if (i < 0)
+            i += n;
+        if (i < 0 || i >= n)
             throw py::index_error("array index out of range");
         return data_[static_cast<std::size_t>(i)];
     }
