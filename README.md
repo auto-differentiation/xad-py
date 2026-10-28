@@ -141,6 +141,28 @@ def f(x):
 print(xad.hessian(f, [1.0, 1.5, 1.3, 1.2]))
 ```
 
+Checkpointing (in `adj_1st` and `fwd_adj_2nd`) replaces part of the recording with a
+`CheckpointCallback`, whose `computeAdjoint(tape)` is called during `computeAdjoints`, for example
+to recompute that part in a nested recording and save tape memory
+(see [samples/checkpointing.py](samples/checkpointing.py)). The tape keeps inserted callbacks
+alive, and `ScopedNestedRecording` is a `with` block:
+
+```python
+class Cb(xadj.CheckpointCallback):
+    def computeAdjoint(self, tape):
+        ybar = tape.getAndResetOutputAdjoint(self.y_slot)
+        x = xadj.Real(self.x_value)
+        tape.registerInput(x)
+        with xadj.ScopedNestedRecording(tape) as nested:
+            y = f(x)  # recompute actively
+            tape.registerOutput(y)
+            y.derivative = ybar
+            nested.computeAdjoints()
+            nested.incrementAdjoint(self.x_slot, x.derivative)
+
+# forward run: compute y passively, store x_value and the slots, then tape.insertCallback(cb)
+```
+
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
 
 ## Building Extensions Against XAD

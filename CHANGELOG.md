@@ -21,6 +21,10 @@ C++ core it is built on.
 - Second-order derivatives: `fwd_adj_2nd` and `fwd_fwd_2nd` modes, with `Complex` and `xad.math`;
   `xad.value`/`xad.derivative` nest as in C++; `xad.jacobian` and `xad.hessian`
   ([#3](https://github.com/auto-differentiation/xad-py/issues/3)).
+- Checkpointing in `adj_1st` and `fwd_adj_2nd`: `CheckpointCallback`, `Tape.insertCallback`,
+  `pushCallback`, `clearCallbacks`, `getAndResetOutputAdjoint` and `incrementAdjoint`,
+  `Real.getSlot`, `x.value = v` (`adj_1st`) and `ScopedNestedRecording`
+  ([#4](https://github.com/auto-differentiation/xad-py/issues/4)).
 
 ### Changed
 

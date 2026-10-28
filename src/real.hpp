@@ -48,7 +48,10 @@ inline void add_extra_methods(py::class_<xad::AReal<V>>& c)
             "Check if the variable is registered on tape and should record")
         .def(
             "getSlot", [](const T& self) { return self.getSlot(); },
-            "Get the slot of this variable on the tape");
+            "Get the slot of this variable on the tape")
+        .def(
+            "setValue", [](T& self, const V& v) { self.value() = v; },
+            "set the underlying value of this variable (not recorded)");
 }
 
 template <class V>

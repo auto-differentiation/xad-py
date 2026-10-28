@@ -43,7 +43,9 @@ void py_adj_1st(py::module_ &m)
     py::module_ adj = m.def_submodule("adj_1st");
     py_real<AReal>(adj);
     py_complex<AReal>(adj);
+    py_checkpoint_callback<xad::Tape<double>>(adj);
     py_tape<xad::Tape<double>>(adj);
+    py_scoped_nested_recording<xad::Tape<double>>(adj);
 }
 
 void py_fwd_adj_2nd(py::module_ &m)
@@ -52,7 +54,9 @@ void py_fwd_adj_2nd(py::module_ &m)
     py::module_ fwd_adj = m.def_submodule("fwd_adj_2nd");
     py_real<mode::active_type>(fwd_adj);
     py_complex<mode::active_type>(fwd_adj);
+    py_checkpoint_callback<mode::tape_type>(fwd_adj);
     py_tape<mode::tape_type>(fwd_adj);
+    py_scoped_nested_recording<mode::tape_type>(fwd_adj);
 }
 
 void py_fwd_fwd_2nd(py::module_ &m)

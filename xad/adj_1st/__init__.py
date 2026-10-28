@@ -23,9 +23,9 @@
 ##############################################################################
 
 from xad._real import add_float_methods
-from xad._xad.adj_1st import Complex, Real, Tape
+from xad._xad.adj_1st import CheckpointCallback, Complex, Real, ScopedNestedRecording, Tape
 
-__all__ = ["Complex", "Real", "Tape"]
+__all__ = ["CheckpointCallback", "Complex", "Real", "ScopedNestedRecording", "Tape"]
 
 
 def _register_inputs(self, inputs):
@@ -43,7 +43,11 @@ def _register_outputs(self, outputs):
 
 setattr(Tape, "registerOutputs", _register_outputs)
 
-setattr(Real, "value", property(Real.getValue, doc="get the underlying float value of the object"))
+setattr(
+    Real,
+    "value",
+    property(Real.getValue, Real.setValue, doc="get/set the underlying float value of the object"),
+)
 setattr(
     Real,
     "derivative",
