@@ -38,6 +38,16 @@ Automatic differentiation has many application areas, for example:
 -   **Meteorology:** Enhancing weather prediction models.
 -   **Biotechnology:** Modeling biological processes and systems.
 
+## Try it in your browser
+
+Run these notebooks on Google Colab, with nothing to install:
+
+| Notebook | |
+|---|---|
+| [Quickstart](notebooks/01_quickstart.ipynb): gradients in adjoint and forward mode, checked against finite differences | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/auto-differentiation/xad-py/blob/main/notebooks/01_quickstart.ipynb) |
+| [Option Greeks](notebooks/02_option_greeks.ipynb): Black-Scholes and Monte Carlo price with all Greeks in one adjoint pass | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/auto-differentiation/xad-py/blob/main/notebooks/02_option_greeks.ipynb) |
+| [Adjoint vs finite differences](notebooks/03_adjoint_vs_finite_differences.ipynb): gradient of a diffusion model as the number of parameters grows | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/auto-differentiation/xad-py/blob/main/notebooks/03_adjoint_vs_finite_differences.ipynb) |
+
 ## Getting Started
 
 Install:
