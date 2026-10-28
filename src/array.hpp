@@ -249,13 +249,15 @@ py::object array_operand(const py::handle& o)
     return py::cast(Array<T>(py::cast<typename Array<T>::float_array>(o)));
 }
 
-// NumPy's __array_ufunc__: the unary and binary ufuncs with an XAD counterpart, NotImplemented
-// otherwise (NumPy then raises TypeError)
+// NumPy's __array_ufunc__: plain calls of the unary and binary ufuncs with an XAD counterpart,
+// NotImplemented otherwise (NumPy then raises TypeError)
 template <class T>
 py::object array_ufunc(const py::object& /*self*/, const py::object& ufunc,
-                       const std::string& /*method*/, const py::args& inputs,
-                       const py::kwargs& /*kwargs*/)
+                       const std::string& method, const py::args& inputs, const py::kwargs& kwargs)
 {
+    // plain calls only: no reduce/accumulate/at/outer, no out=, where=, dtype=, ...
+    if (method != "__call__" || kwargs.size() != 0)
+        return py::reinterpret_borrow<py::object>(Py_NotImplemented);
     const std::string name = py::str(ufunc.attr("__name__"));
     if (inputs.size() == 1)
     {
