@@ -30,6 +30,8 @@
 #include "double_caster.hpp"
 #include <algorithm>
 #include <cstddef>
+#include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -192,6 +194,48 @@ void py_array_binary_op(py::class_<Array<T>>& c, const char* name, const char* r
             { return a.map([&](const T& x) -> T { return op(y, x); }); }, py::is_operator());
 }
 
+// the elementwise XAD math function for a unary NumPy ufunc name, nullptr if there is none
+template <class T>
+T (*array_unary_function(const std::string& name))(const T&)
+{
+    using F = T (*)(const T&);
+    static const std::map<std::string, F> functions = {
+        {"exp", [](const T& x) { return T(xad::exp(x)); }},
+        {"log", [](const T& x) { return T(xad::log(x)); }},
+        {"log10", [](const T& x) { return T(xad::log10(x)); }},
+        {"log2", [](const T& x) { return T(xad::log2(x)); }},
+        {"expm1", [](const T& x) { return T(xad::expm1(x)); }},
+        {"log1p", [](const T& x) { return T(xad::log1p(x)); }},
+        {"sqrt", [](const T& x) { return T(xad::sqrt(x)); }},
+        {"cbrt", [](const T& x) { return T(xad::cbrt(x)); }},
+        {"sin", [](const T& x) { return T(xad::sin(x)); }},
+        {"cos", [](const T& x) { return T(xad::cos(x)); }},
+        {"tan", [](const T& x) { return T(xad::tan(x)); }},
+        {"arcsin", [](const T& x) { return T(xad::asin(x)); }},
+        {"arccos", [](const T& x) { return T(xad::acos(x)); }},
+        {"arctan", [](const T& x) { return T(xad::atan(x)); }},
+        {"sinh", [](const T& x) { return T(xad::sinh(x)); }},
+        {"cosh", [](const T& x) { return T(xad::cosh(x)); }},
+        {"tanh", [](const T& x) { return T(xad::tanh(x)); }},
+        {"arcsinh", [](const T& x) { return T(xad::asinh(x)); }},
+        {"arctanh", [](const T& x) { return T(xad::atanh(x)); }},
+    };
+    auto it = functions.find(name);
+    return it == functions.end() ? nullptr : it->second;
+}
+
+// NumPy's __array_ufunc__: the unary ufuncs with an XAD counterpart, NotImplemented otherwise
+// (NumPy then raises TypeError)
+template <class T>
+py::object array_ufunc(const Array<T>& self, const py::object& ufunc, const std::string& /*method*/,
+                       const py::args& /*inputs*/, const py::kwargs& /*kwargs*/)
+{
+    auto f = array_unary_function<T>(py::str(ufunc.attr("__name__")));
+    if (!f)
+        return py::reinterpret_borrow<py::object>(Py_NotImplemented);
+    return py::cast(self.map(f));
+}
+
 template <class T>
 void py_array(py::module_& m)
 {
@@ -205,7 +249,9 @@ void py_array(py::module_& m)
                                         "the derivatives of the elements as a float array")
                  .def("__getitem__", &Array<T>::item, py::arg("index"),
                       py::return_value_policy::reference_internal, "the element itself, not a copy")
-                 .def("sum", &Array<T>::sum, "the sum of all elements");
+                 .def("sum", &Array<T>::sum, "the sum of all elements")
+                 .def("__array_ufunc__", &array_ufunc<T>, py::arg("ufunc"), py::arg("method"),
+                      "NumPy ufunc dispatch to XAD's elementwise math");
     py_array_binary_op(c, "__add__", "__radd__",
                        [](const auto& x, const auto& y) { return T(x + y); });
     py_array_binary_op(c, "__sub__", "__rsub__",
