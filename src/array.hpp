@@ -144,45 +144,52 @@ class Array
         return s;
     }
 
-    // fold of op over axis (negative counts from the end), starting from init
+    std::size_t ndim() const { return shape_.size(); }
+
+    py::ssize_t dim(std::size_t d) const { return shape_[d]; }
+
+    // fold of op, starting from init, over the dimensions flagged in reduced; keepdims keeps them
+    // with extent 1
     template <class Op>
-    Array reduce(py::ssize_t axis, double init, Op op) const
+    Array reduce(const std::vector<bool>& reduced, bool keepdims, double init, Op op) const
     {
-        const auto nd = static_cast<py::ssize_t>(shape_.size());
-        if (axis < 0)
-            axis += nd;
-        if (axis < 0 || axis >= nd)
-            throw py::index_error("axis out of bounds");
-        const auto ax = static_cast<std::size_t>(axis);
-        std::size_t outer = 1, inner = 1;
-        for (std::size_t d = 0; d < ax; ++d) outer *= static_cast<std::size_t>(shape_[d]);
-        for (std::size_t d = ax + 1; d < shape_.size(); ++d)
-            inner *= static_cast<std::size_t>(shape_[d]);
-        const auto n = static_cast<std::size_t>(shape_[ax]);
-        std::vector<T> r(outer * inner, T(init));
-        for (std::size_t o = 0; o < outer; ++o)
-            for (std::size_t j = 0; j < n; ++j)
-                for (std::size_t i = 0; i < inner; ++i)
-                    r[o * inner + i] = op(r[o * inner + i], data_[(o * n + j) * inner + i]);
-        std::vector<py::ssize_t> shape(shape_);
-        shape.erase(shape.begin() + axis);
+        const std::size_t nd = shape_.size();
+        std::vector<py::ssize_t> shape;
+        // strides of the result in the input's index space, 0 along reduced dimensions
+        std::vector<std::size_t> strides(nd, 0);
+        std::size_t n = 1;
+        for (std::size_t d = nd; d-- > 0;)
+        {
+            if (!reduced[d])
+            {
+                strides[d] = n;
+                n *= static_cast<std::size_t>(shape_[d]);
+            }
+        }
+        for (std::size_t d = 0; d < nd; ++d)
+        {
+            if (!reduced[d])
+                shape.push_back(shape_[d]);
+            else if (keepdims)
+                shape.push_back(1);
+        }
+        std::vector<T> r(n, T(init));
+        std::vector<py::ssize_t> idx(nd, 0);
+        std::size_t io = 0;
+        for (const T& x : data_)
+        {
+            r[io] = op(r[io], x);
+            // next index, last dimension fastest
+            for (std::size_t d = nd; d-- > 0;)
+            {
+                io += strides[d];
+                if (++idx[d] < shape_[d])
+                    break;
+                io -= strides[d] * static_cast<std::size_t>(shape_[d]);
+                idx[d] = 0;
+            }
+        }
         return Array(std::move(shape), std::move(r));
-    }
-
-    T prod() const
-    {
-        T p = 1.0;
-        for (const T& x : data_) p *= x;
-        return p;
-    }
-
-    std::size_t size() const { return data_.size(); }
-
-    // the extent of axis (negative counts from the end, in bounds)
-    py::ssize_t axis_extent(py::ssize_t axis) const
-    {
-        const auto nd = static_cast<py::ssize_t>(shape_.size());
-        return shape_[static_cast<std::size_t>(axis < 0 ? axis + nd : axis)];
     }
 
   private:
@@ -326,35 +333,74 @@ py::object array_ufunc(const py::object& /*self*/, const py::object& ufunc,
     return py::reinterpret_borrow<py::object>(Py_NotImplemented);
 }
 
-// NumPy's __array_function__: sum, prod and mean (with axis) on an Array, NotImplemented otherwise
-// (NumPy then raises TypeError)
+// raises numpy.exceptions.AxisError for axis out of bounds in ndim dimensions
+[[noreturn]] inline void throw_axis_error(py::ssize_t axis, std::size_t ndim)
+{
+    py::object e = py::module_::import("numpy.exceptions").attr("AxisError")(axis, ndim);
+    PyErr_SetObject(reinterpret_cast<PyObject*>(Py_TYPE(e.ptr())), e.ptr());
+    throw py::error_already_set();
+}
+
+// the dimensions of ndim reduced by a NumPy axis argument: None (all), an int or a sequence
+inline std::vector<bool> reduced_dimensions(const py::object& axis, std::size_t ndim)
+{
+    if (axis.is_none())
+        return std::vector<bool>(ndim, true);
+    std::vector<bool> reduced(ndim, false);
+    const auto nd = static_cast<py::ssize_t>(ndim);
+    const py::list axes =
+        py::isinstance<py::int_>(axis) ? py::list(py::make_tuple(axis)) : py::list(axis);
+    for (const auto& ax : axes)
+    {
+        auto d = ax.cast<py::ssize_t>();
+        if (d < -nd || d >= nd)
+            throw_axis_error(d, ndim);
+        reduced[static_cast<std::size_t>(d < 0 ? d + nd : d)] = true;
+    }
+    return reduced;
+}
+
+// NumPy's __array_function__: sum, prod and mean (with axis, keepdims) on an Array,
+// NotImplemented otherwise (NumPy then raises TypeError)
 template <class T>
 py::object array_function(const py::object& /*self*/, const py::object& func,
                           const py::object& /*types*/, const py::tuple& args,
                           const py::dict& kwargs)
 {
+    const auto unsupported = py::reinterpret_borrow<py::object>(Py_NotImplemented);
     const std::string name = py::str(func.attr("__name__"));
-    if ((name != "sum" && name != "prod" && name != "mean") || args.size() < 1 ||
+    if ((name != "sum" && name != "prod" && name != "mean") || args.size() < 1 || args.size() > 2 ||
         !py::isinstance<Array<T>>(args[0]))
-        return py::reinterpret_borrow<py::object>(Py_NotImplemented);
-    const auto& a = args[0].cast<const Array<T>&>();
-    py::object axis = args.size() > 1 ? py::object(args[1]) : kwargs.attr("get")("axis");
-    if (axis.is_none())
+        return unsupported;
+    for (const auto& kv : kwargs)
     {
-        if (name == "sum")
-            return py::cast(a.sum());
-        if (name == "prod")
-            return py::cast(a.prod());
-        return py::cast(T(a.sum() / static_cast<double>(a.size())));
+        const std::string key = py::str(kv.first);
+        if (key != "axis" && key != "keepdims")
+            return unsupported;
     }
-    const auto ax = axis.cast<py::ssize_t>();
-    if (name == "prod")
-        return py::cast(a.reduce(ax, 1.0, [](const T& p, const T& x) { return T(p * x); }));
-    auto s = a.reduce(ax, 0.0, [](const T& s, const T& x) { return T(s + x); });
-    if (name == "sum")
-        return py::cast(std::move(s));
-    const auto n = static_cast<double>(a.axis_extent(ax));
-    return py::cast(s.map([n](const T& x) { return T(x / n); }));
+    const auto& a = args[0].cast<const Array<T>&>();
+    const auto reduced = reduced_dimensions(
+        args.size() > 1 ? py::object(args[1]) : kwargs.attr("get")("axis"), a.ndim());
+    const bool keepdims = py::bool_(kwargs.attr("get")("keepdims", false));
+    py::ssize_t count = 1;
+    for (std::size_t d = 0; d < reduced.size(); ++d)
+        if (reduced[d])
+            count *= a.dim(d);
+
+    Array<T> r =
+        name == "prod"
+            ? a.reduce(reduced, keepdims, 1.0, [](const T& p, const T& x) { return T(p * x); })
+            : a.reduce(reduced, keepdims, 0.0, [](const T& s, const T& x) { return T(s + x); });
+    if (name == "mean")
+    {
+        if (count == 0 && PyErr_WarnEx(PyExc_RuntimeWarning, "Mean of empty slice.", 1) < 0)
+            throw py::error_already_set();
+        const auto n = static_cast<double>(count);
+        r = r.map([n](const T& x) { return T(x / n); });
+    }
+    if (r.ndim() == 0)
+        return py::cast(T(r.item(0)));
+    return py::cast(std::move(r));
 }
 
 template <class T>
