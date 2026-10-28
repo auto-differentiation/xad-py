@@ -201,9 +201,12 @@ class Array
         return v;
     }
 
-    // assigns src to the elements, broadcasting src to their shape as NumPy does
+    // assigns src to the elements, broadcasting src to their shape as NumPy does; from a copy of
+    // src when it shares the storage (it may overlap), as NumPy buffers
     void assign(const Array& src)
     {
+        if (src.data_ == data_)
+            return assign(src.map([](const T& x) { return x; }));
         const std::size_t nd = shape_.size();
         bool fits = src.shape_.size() <= nd;
         for (std::size_t d = 0; fits && d < nd; ++d)
