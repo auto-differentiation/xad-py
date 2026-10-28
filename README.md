@@ -113,6 +113,24 @@ with xadj.Tape() as tape:
     print(f"dRe(w)/dx = {x.derivative}, dRe(w)/dy = {y.derivative}")
 ```
 
+Second-order derivatives use nested modes, as in XAD's C++: `xad.fwd_adj_2nd` (forward over
+adjoint) and `xad.fwd_fwd_2nd`. `xad.value(x)` and `xad.derivative(x)` return the inner first-order
+parts, so `xad.derivative(xad.derivative(x))` is a second derivative (see
+[samples/fwd_adj_2nd.py](samples/fwd_adj_2nd.py)). For whole matrices, `xad.jacobian` and
+`xad.hessian` take a function of a list of `Real`s:
+
+```python
+import xad
+from xad.math import sin, cos
+
+
+def f(x):
+    return sin(x[0] * x[1]) - cos(x[1] * x[2]) - sin(x[2] * x[3]) - cos(x[3] * x[0])
+
+
+print(xad.hessian(f, [1.0, 1.5, 1.3, 1.2]))
+```
+
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
 
 ## Building Extensions Against XAD

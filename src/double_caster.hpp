@@ -24,15 +24,26 @@
 
 #pragma once
 
-#include <XAD/XAD.hpp>
 #include <pybind11/pybind11.h>
 
-// pybind11's double caster, but rejecting XAD Reals: their __float__ must not convert them
-// implicitly (drops derivatives, e.g. mixing adj/fwd). Explicit float(x) still works.
+// pybind11's double caster, but rejecting the XAD active types (the types bound in xad._xad:
+// Reals of any mode and order, Complex): their __float__ must not convert them implicitly
+// (drops derivatives, e.g. mixing adj/fwd or orders). Explicit float(x) still works.
 namespace pybind11
 {
 namespace detail
 {
+// whether src's (base) bound type is defined in xad._xad or its submodules, not in another
+// extension sharing pybind11's type registry
+inline bool is_xad_type(handle src)
+{
+    const type_info* tinfo = get_type_info(Py_TYPE(src.ptr()));
+    if (!tinfo)
+        return false;
+    const std::string mod = str(getattr(handle((PyObject*)tinfo->type), "__module__", str("")));
+    return mod == "xad._xad" || mod.rfind("xad._xad.", 0) == 0;
+}
+
 template <>
 class type_caster<double>
 {
@@ -42,9 +53,7 @@ class type_caster<double>
         PyObject* o = src.ptr();
         if (!o)
             return false;
-        if (!PyFloat_Check(o) && !PyLong_Check(o) &&
-            (!convert || isinstance<xad::AReal<double>>(src) ||
-             isinstance<xad::FReal<double>>(src)))
+        if (!PyFloat_Check(o) && !PyLong_Check(o) && (!convert || is_xad_type(src)))
             return false;
         double d = PyFloat_AsDouble(o);
         if (d == -1.0 && PyErr_Occurred())

@@ -23,13 +23,19 @@
 ##############################################################################
 
 """XAD cmath module - mimics the standard cmath module, but allows using XAD active
-complex types (xad.adj_1st.Complex, xad.fwd_1st.Complex) as arguments. Called with
+complex types (the Complex of every mode, e.g. xad.adj_1st.Complex) as arguments. Called with
 passive arguments only (complex, float, int), the functions return exactly what the
 standard cmath module returns.
 """
 
 import cmath as _cmath
-from xad._xad import adj_1st as _adj, fwd_1st as _fwd, cmath as _active
+from xad._xad import (
+    adj_1st as _adj,
+    fwd_1st as _fwd,
+    fwd_adj_2nd as _fwd_adj,
+    fwd_fwd_2nd as _fwd_fwd,
+    cmath as _active,
+)
 
 __all__ = [
     "exp",
@@ -59,12 +65,16 @@ _MODE_COMPLEX = {
     _adj.Real: _adj.Complex,
     _fwd.Complex: _fwd.Complex,
     _fwd.Real: _fwd.Complex,
+    _fwd_adj.Complex: _fwd_adj.Complex,
+    _fwd_adj.Real: _fwd_adj.Complex,
+    _fwd_fwd.Complex: _fwd_fwd.Complex,
+    _fwd_fwd.Real: _fwd_fwd.Complex,
 }
 
 
 def _promote(arg, mode_complex):
     """Real or Python complex to the mode's Complex; Complex and float stay as they are"""
-    if isinstance(arg, (complex, _adj.Real, _fwd.Real)):
+    if isinstance(arg, (complex, _adj.Real, _fwd.Real, _fwd_adj.Real, _fwd_fwd.Real)):
         return mode_complex(arg)
     return arg
 

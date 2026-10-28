@@ -41,7 +41,18 @@ void add_cmath_functions(py::module_& m)
     using C = std::complex<T>;
     m.def("exp", [](const C& z) { return C(std::exp(z)); }, "exponential function");
     m.def("log", [](const C& z) { return C(std::log(z)); }, "natural logarithm");
-    m.def("log10", [](const C& z) { return C(std::log10(z)); }, "base 10 logarithm");
+    m.def(
+        "log10",
+        [](const C& z)
+        {
+            // XAD's std::log10 does not compile for higher order (scales by the inner type): its
+            // formula with the factor as T
+            if constexpr (std::is_floating_point_v<typename T::value_type>)
+                return C(std::log10(z));
+            else
+                return C(std::log(z) * T(0.43429448190325182765112891891661));
+        },
+        "base 10 logarithm");
     m.def("sqrt", [](const C& z) { return C(std::sqrt(z)); }, "square root");
     m.def("sin", [](const C& z) { return C(std::sin(z)); }, "sine");
     m.def("cos", [](const C& z) { return C(std::cos(z)); }, "cosine");
@@ -56,7 +67,7 @@ void add_cmath_functions(py::module_& m)
     m.def("acosh", [](const C& z) { return C(std::acosh(z)); }, "inverse hyperbolic cosine");
     m.def("atanh", [](const C& z) { return C(std::atanh(z)); }, "inverse hyperbolic tangent");
     m.def(
-        "log", [](const C& z, double base) { return C(std::log(z) / std::log(base)); },
+        "log", [](const C& z, double base) { return C(std::log(z) / py_passive<T>(std::log(base))); },
         "logarithm to the given base");
     m.def(
         "log", [](const C& z, const C& base) { return C(std::log(z) / std::log(base)); },
@@ -82,4 +93,6 @@ void py_cmath(py::module_& m)
 
     add_cmath_functions<AReal>(m1);
     add_cmath_functions<FReal>(m1);
+    add_cmath_functions<xad::fwd_adj<double>::active_type>(m1);
+    add_cmath_functions<xad::fwd_fwd<double>::active_type>(m1);
 }

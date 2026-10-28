@@ -28,6 +28,7 @@
 #include "cmath.hpp"
 #include "complex.hpp"
 #include "exceptions.hpp"
+#include "jacobian_hessian.hpp"
 #include "math.hpp"
 #include "real.hpp"
 #include "tape.hpp"
@@ -42,7 +43,23 @@ void py_adj_1st(py::module_ &m)
     py::module_ adj = m.def_submodule("adj_1st");
     py_real<AReal>(adj);
     py_complex<AReal>(adj);
-    py_tape(adj);
+    py_tape<xad::Tape<double>>(adj);
+}
+
+void py_fwd_adj_2nd(py::module_ &m)
+{
+    using mode = xad::fwd_adj<double>;
+    py::module_ fwd_adj = m.def_submodule("fwd_adj_2nd");
+    py_real<mode::active_type>(fwd_adj);
+    py_complex<mode::active_type>(fwd_adj);
+    py_tape<mode::tape_type>(fwd_adj);
+}
+
+void py_fwd_fwd_2nd(py::module_ &m)
+{
+    py::module_ fwd_fwd = m.def_submodule("fwd_fwd_2nd");
+    py_real<xad::fwd_fwd<double>::active_type>(fwd_fwd);
+    py_complex<xad::fwd_fwd<double>::active_type>(fwd_fwd);
 }
 
 void py_fwd_1st(py::module_ &m)
@@ -56,9 +73,13 @@ PYBIND11_MODULE(_xad, m)
 {
     py_adj_1st(m);
     py_fwd_1st(m);
+    py_fwd_adj_2nd(m);
+    py_fwd_fwd_2nd(m);
     py_math(m);
     py_cmath(m);
     py_exceptions(m);
+    py_jacobian(m);
+    py_hessian(m);
 
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
