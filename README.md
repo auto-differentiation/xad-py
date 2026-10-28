@@ -163,6 +163,27 @@ class Cb(xadj.CheckpointCallback):
 # forward run: compute y passively, store x_value and the slots, then tape.insertCallback(cb)
 ```
 
+External functions use the same interface: a function computed outside XAD (passively, or in
+another library) enters the recording through a `CheckpointCallback` whose `computeAdjoint`
+applies its hand-written adjoint (see [samples/external_function.py](samples/external_function.py)):
+
+```python
+class ExternalSum(xadj.CheckpointCallback):
+    def compute_external(self, xs):
+        tape = xadj.Tape.getActive()
+        self.x_slots = [x.getSlot() for x in xs]
+        y = xadj.Real(sum(x.value for x in xs))  # computed passively
+        tape.registerOutput(y)
+        self.y_slot = y.getSlot()
+        tape.insertCallback(self)
+        return y
+
+    def computeAdjoint(self, tape):
+        ybar = tape.getAndResetOutputAdjoint(self.y_slot)
+        for s in self.x_slots:
+            tape.incrementAdjoint(s, ybar)  # d(sum)/dx_i = 1
+```
+
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
 
 ## Building Extensions Against XAD
