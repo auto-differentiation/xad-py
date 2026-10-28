@@ -68,7 +68,8 @@ pybind11_add_module(
   complex.hpp
   exceptions.hpp
   jacobian_hessian.hpp
-  double_caster.hpp)
+  double_caster.hpp
+  register_input.hpp)
 
 set_target_properties(_xad PROPERTIES CXX_STANDARD 17)
 target_link_libraries(_xad PRIVATE XAD::xad Threads::Threads)

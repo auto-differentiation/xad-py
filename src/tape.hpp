@@ -28,6 +28,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "double_caster.hpp"
+#include "register_input.hpp"
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -224,21 +225,7 @@ void py_tape(py::module_ &m)
              "get the current position on the tape. Used in conjunction with `computeAdjointsTo`.")
         .def(
             "registerInput",
-            [](Tape &self, AReal &inp)
-            {
-                // drop any slot left from an earlier tape (XAD skips variables with a slot),
-                // with no tape active, so the old slot is not unregistered on a tape it is not on
-                Tape *active = Tape::getActive();
-                Tape::deactivateAll();
-                {
-                    AReal fresh;
-                    fresh.value() = inp.value();
-                    inp = std::move(fresh);  // fresh takes the old slot and drops it here
-                }
-                if (active)
-                    Tape::setActive(active);
-                self.registerInput(inp);
-            },
+            [](Tape &self, AReal &inp) { register_fresh_input(self, inp); },
             "registers an input variable with tape, for recording")
         .def("registerOutput", py::overload_cast<AReal &>(&Tape::registerOutput),
              "registers an output with the tape (to be called before setting output adjoints)")
