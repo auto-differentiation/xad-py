@@ -743,7 +743,10 @@ inline std::vector<bool> reduced_dimensions(const py::object& axis, std::size_t 
         auto d = ax.cast<py::ssize_t>();
         if (d < -nd || d >= nd)
             throw_axis_error(d, ndim);
-        reduced[static_cast<std::size_t>(d < 0 ? d + nd : d)] = true;
+        const auto k = static_cast<std::size_t>(d < 0 ? d + nd : d);
+        if (reduced[k])
+            throw py::value_error("duplicate value in 'axis'");
+        reduced[k] = true;
     }
     return reduced;
 }
