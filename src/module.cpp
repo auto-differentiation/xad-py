@@ -41,6 +41,7 @@ namespace py = pybind11;
 // in array.cpp: pybind11/numpy.h brings pybind11/complex.h, whose caster would claim the
 // std::complex<T> bound as Complex here
 void py_array_adj_1st(py::module_& m);
+void py_array_fwd_1st(py::module_& m);
 
 void py_adj_1st(py::module_ &m)
 {
@@ -76,6 +77,7 @@ void py_fwd_1st(py::module_ &m)
     py::module_ fwd = m.def_submodule("fwd_1st");
     py_real<FReal>(fwd);
     py_complex<FReal>(fwd);
+    py_array_fwd_1st(fwd);
 }
 
 PYBIND11_MODULE(_xad, m)

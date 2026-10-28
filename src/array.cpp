@@ -39,3 +39,5 @@ void py_array_adj_1st(py::module_& m)
             [](Array<T>& a, Tape& t) { a.for_each([&](T& x) { t.registerOutput(x); }); },
             py::arg("tape"), "register the elements on tape as outputs, in C order");
 }
+
+void py_array_fwd_1st(py::module_& m) { py_array<xad::FReal<double>>(m); }
