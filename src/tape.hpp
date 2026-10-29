@@ -28,6 +28,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "double_caster.hpp"
+#include "register_input.hpp"
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -222,8 +223,10 @@ void py_tape(py::module_ &m)
              "class method to get a reference to the currently active tape")
         .def("getPosition", &Tape::getPosition,
              "get the current position on the tape. Used in conjunction with `computeAdjointsTo`.")
-        .def("registerInput", py::overload_cast<AReal &>(&Tape::registerInput),
-             "registers an input variable with tape, for recording")
+        .def(
+            "registerInput",
+            [](Tape &self, AReal &inp) { register_fresh_input(self, inp); },
+            "registers an input variable with tape, for recording")
         .def("registerOutput", py::overload_cast<AReal &>(&Tape::registerOutput),
              "registers an output with the tape (to be called before setting output adjoints)")
         .def("computeAdjoints", &Tape::computeAdjoints,

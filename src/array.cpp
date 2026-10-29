@@ -25,6 +25,7 @@
 #include "double_caster.hpp"  // first: must precede any double caster use
 
 #include "array.hpp"
+#include "register_input.hpp"
 
 void py_array_adj_1st(py::module_& m)
 {
@@ -33,7 +34,7 @@ void py_array_adj_1st(py::module_& m)
     py_array<T>(m)
         .def(
             "_register_inputs",
-            [](Array<T>& a, Tape& t) { a.for_each([&](T& x) { t.registerInput(x); }); },
+            [](Array<T>& a, Tape& t) { a.for_each([&](T& x) { register_fresh_input(t, x); }); },
             py::arg("tape"), "register the elements on tape as inputs, in C order")
         .def(
             "_register_outputs",
