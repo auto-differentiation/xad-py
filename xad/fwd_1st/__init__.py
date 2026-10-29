@@ -23,9 +23,9 @@
 ##############################################################################
 
 from xad._real import add_float_methods
-from xad._xad.fwd_1st import Complex, Real
+from xad._xad.fwd_1st import Array, Complex, Real
 
-__all__ = ["Complex", "Real"]
+__all__ = ["Array", "Complex", "Real"]
 
 
 setattr(

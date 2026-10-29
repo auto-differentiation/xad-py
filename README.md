@@ -184,6 +184,34 @@ class ExternalSum(xadj.CheckpointCallback):
             tape.incrementAdjoint(s, ybar)  # d(sum)/dx_i = 1
 ```
 
+### NumPy Arrays
+
+`xad.adj_1st.Array` and `xad.fwd_1st.Array` hold n-dimensional arrays of active values in C++,
+so whole-array operations run as one C++ loop each instead of one Python call per element
+(see [samples/numpy_arrays.py](samples/numpy_arrays.py)):
+
+```python
+import numpy as np
+import xad.adj_1st as xadj
+
+with xadj.Tape() as tape:
+    x = xadj.Array([0.1, 0.2, 0.3])
+    tape.registerInputs(x)
+    tape.newRecording()
+    y = np.sum(np.arange(1.0, 4.0) * np.exp(x))
+    tape.registerOutput(y)
+    y.derivative = 1.0
+    tape.computeAdjoints()
+    print(x.derivatives)  # dy/dx as a float array
+```
+
+Supported are elementwise operators and ufuncs (arithmetic, comparisons, `exp`, `log`, `sqrt`,
+`sin`, ...) with broadcasting, `sum`/`prod`/`mean` with `axis`, `@`/`dot`, `where`,
+`concatenate`, and indexing, slicing and `reshape` as views. `a[i, j]` is the element `Real`
+itself, `np.asarray(a)` gives the values, and `np.asarray(a, dtype=object)` the elements.
+Unsupported NumPy functions raise `TypeError` rather than dropping the derivatives. Arrays need
+NumPy >= 1.25 at runtime; it is not a build or import dependency of the package.
+
 For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
 
 ## Building Extensions Against XAD
