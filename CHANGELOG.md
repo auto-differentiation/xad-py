@@ -47,6 +47,9 @@ C++ core it is built on.
 
 - An XAD active type of any mode or order is no longer converted implicitly to a float argument.
 - `import xad` alone sets up every mode's `Real` (properties such as `fwd_1st.Real.derivative`).
+- An input registered on an earlier tape and registered again on a new tape gets its adjoints
+  there (it was skipped, giving 0 or, with many inputs, a crash); also for `Array` inputs
+  ([#54](https://github.com/auto-differentiation/xad-py/pull/54)).
 
 ## [2.1.0] - 2026-10-24
 
