@@ -84,7 +84,7 @@ Tracker = "https://github.com/auto-differentiation/xad-py/issues"
 
 [dependency-groups]
 test = ["pytest"]
-lint = ["black==26.10.1", "flake8==7.4.1", "mypy==2.4.0"]
+lint = ["black==26.10.1", "flake8==7.4.1", "mypy==2.4.1"]
 dev = [{ include-group = "test" }, { include-group = "lint" }, "pre-commit"]
 
 [tool.scikit-build]
