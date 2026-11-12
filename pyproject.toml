@@ -28,7 +28,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "xad"
-version = "2.1.0"
+version = "2.2.0"
 description = "High-Performance Automatic Differentiation for Python"
 readme = "README.md"
 requires-python = ">=3.10"

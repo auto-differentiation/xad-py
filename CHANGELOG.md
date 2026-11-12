@@ -8,7 +8,7 @@ The package version follows the [XAD](https://github.com/auto-differentiation/xa
 C++ core it is built on.
 
 
-## [unreleased]
+## [2.2.0] - 2026-11-12
 
 ### Added
 
@@ -38,6 +38,7 @@ C++ core it is built on.
 
 ### Changed
 
+- Built on XAD 2.2.0.
 - Thread-local tapes: each thread has its own active tape.
 - Dynamic MSVC runtime on Windows.
 - Assigning an unknown attribute to a `Real` or `Tape` raises `AttributeError`; it was stored
@@ -86,6 +87,7 @@ Minor fixes to allow linking against QuantLib-Risks without duplicate symbols.
 Initial release of Python bindings for XAD.
 
 
+[2.2.0]: https://github.com/auto-differentiation/xad-py/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/auto-differentiation/xad-py/compare/v1.5.2...v2.1.0
 [1.5.2]: https://github.com/auto-differentiation/xad-py/compare/v1.5.1.1...v1.5.2
 [1.5.1.1]: https://github.com/auto-differentiation/xad-py/compare/v1.5.1...v1.5.1.1
