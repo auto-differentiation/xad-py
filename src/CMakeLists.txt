@@ -35,6 +35,23 @@ set(XAD_SHARED_LIBS ON)
 set(XAD_NO_THREADLOCAL OFF)
 set(XAD_STATIC_MSVC_RUNTIME OFF)
 set(XAD_WARNINGS_PARANOID OFF)
+# strong inlining is safe for any program; not with cl.exe, where it compiles much slower (clang-cl
+# has compiler ID Clang and keeps it). Tape options whose safety depends on how a program uses the
+# tape stay off, and initial-exec TLS breaks modules loaded with dlopen.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  set(XAD_USE_STRONG_INLINE OFF)
+else()
+  set(XAD_USE_STRONG_INLINE ON)
+endif()
+set(XAD_TLS_INITIAL_EXEC OFF)
+set(XAD_LINEAR_SLOTS OFF)
+set(XAD_HUGE_PAGES OFF)
+set(XAD_TAPE_REUSE_SLOTS OFF)
+set(XAD_TAPE_TRACK_LIVE_SLOTS OFF)
+set(XAD_COPY_ELISION OFF)
+set(XAD_SKIP_ZERO_PARTIALS OFF)
+set(XAD_REDUCED_MEMORY OFF)
+set(XAD_OUTLINE_RECORDING OFF)
 # AVX only when targeting x86_64
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles(
