@@ -1,10 +1,10 @@
-[![Python](https://img.shields.io/pypi/pyversions/xad.svg)](https://auto-differentiation.github.io/tutorials/python)
+[![Python](https://img.shields.io/pypi/pyversions/xad.svg)](https://www.xcelerit.com/xad/docs/tutorials/python)
 
 > Part of the [XAD ecosystem](https://github.com/auto-differentiation) — the fastest automatic differentiation library for C++.
 > If this is useful to you, please star the [core XAD repository](https://github.com/auto-differentiation/xad).
 
 XAD is a library designed for
-[automatic differentiation](https://auto-differentiation.github.io/tutorials/aad/),
+[automatic differentiation](https://www.xcelerit.com/xad/docs/tutorials/aad/),
 aimed at both beginners and advanced users. It is intended for use in
 production environments, emphasizing performance and ease of use. The library
 facilitates the computation of derivatives within computer programs, making
@@ -19,7 +19,7 @@ The Python bindings for XAD offer the following features:
 - High performance, as demonstrated in extensive production use.
 
 For more details and to integrate XAD into your projects, consult the
-comprehensive [documentation](https://auto-differentiation.github.io/tutorials/python).
+comprehensive [documentation](https://www.xcelerit.com/xad/docs/tutorials/python).
 
 ## Application Areas
 
@@ -212,7 +212,7 @@ itself, `np.asarray(a)` gives the values, and `np.asarray(a, dtype=object)` the 
 Unsupported NumPy functions raise `TypeError` rather than dropping the derivatives. Arrays need
 NumPy >= 1.25 at runtime; it is not a build or import dependency of the package.
 
-For more information, see the [Documentation](https://auto-differentiation.github.io/tutorials/python).
+For more information, see the [Documentation](https://www.xcelerit.com/xad/docs/tutorials/python).
 
 ## Building Extensions Against XAD
 

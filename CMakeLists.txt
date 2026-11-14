@@ -29,7 +29,7 @@ project(
   xad-py
   LANGUAGES CXX
   DESCRIPTION "Python bindings for the XAD automatic differentiation library"
-  HOMEPAGE_URL "https://auto-differentiation.github.io")
+  HOMEPAGE_URL "https://www.xcelerit.com/xad/docs/")
 
 set(CMAKE_CXX_STANDARD 17)
 
