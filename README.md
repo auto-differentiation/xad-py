@@ -21,6 +21,8 @@ The Python bindings for XAD offer the following features:
 For more details and to integrate XAD into your projects, consult the
 comprehensive [documentation](https://www.xcelerit.com/xad/docs/tutorials/python).
 
+> **Using XAD in your organization?** XAD is open source under the AGPL, to try it, for research and for open-source projects. The AGPL is not suitable for enterprise settings: for use in your organization you need a separate commercial license from Xcelerit, by annual XAD subscription. See [XAD licensing](https://www.xcelerit.com/xad/licensing/) for the terms, a quote within one business day, or a free, confidential license check.
+
 ## Application Areas
 
 Automatic differentiation has many application areas, for example:
