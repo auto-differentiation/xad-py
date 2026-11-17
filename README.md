@@ -237,4 +237,4 @@ Import `xad` before the extension so the library is loaded.
 ## Related Projects
 
 - XAD Comprehensive automatic differentiation in [Python](https://github.com/auto-differentiation/xad-py) and [C++](https://github.com/auto-differentiation/xad)
-- QuantLib-Risks: Fast risk evaluations in [Python](https://github.com/auto-differentiation/QuantLib-Risks-Py) and [C++](https://github.com/auto-differentiation/QuantLib-Risks-Cpp)
+- QuantLibAAD: Fast risk evaluations in [Python](https://github.com/auto-differentiation/QuantLibAAD-Py) and [C++](https://github.com/auto-differentiation/QuantLibAAD)
