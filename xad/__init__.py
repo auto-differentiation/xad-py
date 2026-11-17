@@ -28,6 +28,10 @@ import os
 import sys
 from typing import Any, Union
 
+from . import _license_notice
+
+_license_notice.show_once()
+
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 
 if sys.platform == "win32":
