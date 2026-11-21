@@ -8,6 +8,13 @@ The package version follows the [XAD](https://github.com/auto-differentiation/xa
 C++ core it is built on.
 
 
+## [Unreleased]
+
+### Added
+
+- `import xad` prints a short license notice to stderr once per Python environment.
+
+
 ## [2.2.0] - 2026-11-12
 
 ### Added
@@ -87,6 +94,7 @@ Minor fixes to allow linking against QuantLib-Risks without duplicate symbols.
 Initial release of Python bindings for XAD.
 
 
+[Unreleased]: https://github.com/auto-differentiation/xad-py/compare/v2.2.0...HEAD
 [2.2.0]: https://github.com/auto-differentiation/xad-py/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/auto-differentiation/xad-py/compare/v1.5.2...v2.1.0
 [1.5.2]: https://github.com/auto-differentiation/xad-py/compare/v1.5.1.1...v1.5.2
