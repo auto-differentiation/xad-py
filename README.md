@@ -3,25 +3,22 @@
 > Part of the [XAD ecosystem](https://github.com/auto-differentiation) — the fastest automatic differentiation library for C++.
 > If this is useful to you, please star the [core XAD repository](https://github.com/auto-differentiation/xad).
 
-XAD is a library designed for
-[automatic differentiation](https://www.xcelerit.com/xad/docs/tutorials/aad/),
-aimed at both beginners and advanced users. It is intended for use in
-production environments, emphasizing performance and ease of use. The library
-facilitates the computation of derivatives within computer programs, making
-the process efficient and straightforward for a wide range of mathematical
-functions, from simple arithmetic to complex calculations, ensuring accurate
-and automatic derivative computations.
+XAD is a library for
+[automatic differentiation](https://www.xcelerit.com/xad/docs/tutorials/aad/):
+it computes accurate derivatives of the functions in your program, from simple
+arithmetic to complex calculations. It is built for production use, with a
+focus on performance and ease of use.
 
-The Python bindings for XAD offer the following features:
+The Python bindings offer:
 
-- Support for both forward and adjoint modes at the first order.
+- Forward and adjoint mode for first-order derivatives, and second-order
+  derivatives by nesting them, with Jacobian and Hessian helpers.
 - Strong exception-safety guarantees.
 - High performance, as demonstrated in extensive production use.
 
-For more details and to integrate XAD into your projects, consult the
-comprehensive [documentation](https://www.xcelerit.com/xad/docs/tutorials/python).
+See the [documentation](https://www.xcelerit.com/xad/docs/tutorials/python) for details.
 
-> **Using XAD in your organization?** XAD is open source under the AGPL, to try it, for research and for open-source projects. The AGPL is not suitable for enterprise settings: for use in your organization you need a separate commercial license from Xcelerit, by annual XAD subscription. See [XAD licensing](https://www.xcelerit.com/xad/licensing/) for the terms, a quote within one business day, or a free, confidential license check.
+> **Using XAD in your organization?** XAD is open source under the AGPL, to try it, for research and for open-source projects. In practice, the AGPL's terms don't suit most production settings in finance. For production use, XAD is available under an annual subscription: commercial terms, support, updates and code generation. See [XAD licensing](https://www.xcelerit.com/xad/licensing/) for the terms, a quote within one business day, or a free, confidential license check.
 
 ## Application Areas
 
