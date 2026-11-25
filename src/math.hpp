@@ -27,13 +27,49 @@
 #include <XAD/XAD.hpp>
 #include <pybind11/pybind11.h>
 #include "double_caster.hpp"
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numeric>
+#include <stdexcept>
 
 namespace py = pybind11;
 
 using AReal = xad::AReal<double>;
 using FReal = xad::FReal<double>;
+
+constexpr const char* round_to_int64_doc =
+    "rounds to the nearest integer in the current rounding mode, returned as an int in the "
+    "64-bit range on every platform; raises ValueError for NaN and OverflowError for inf or "
+    "an out-of-range result of a float argument";
+
+// lrint/llrint: rounds the passive value in the current rounding mode, without recording
+template <class T>
+long long round_to_int64(const T& x)
+{
+    const double r = std::nearbyint(xad::detail::passive_value(x));
+    if (std::isnan(r))
+        throw py::value_error("cannot convert NaN to integer");
+    if (r >= 9223372036854775808.0 || r < -9223372036854775808.0)  // [-2^63, 2^63), not +-inf
+        throw std::overflow_error("rounded value does not fit a 64-bit integer");
+    return static_cast<long long>(r);
+}
+
+// an integer exponent (anything with __index__ (numpy integers too; math.ldexp takes only int))
+// clamped to int, as XAD does, so any n works with a 32-bit long (Windows) too; exact, as the
+// result already saturates
+inline long clamp_exponent(const py::handle& n)
+{
+    const auto index = py::reinterpret_steal<py::int_>(PyNumber_Index(n.ptr()));
+    if (!index)
+        throw py::error_already_set();  // TypeError for a float or other non-integer
+    constexpr int lo = std::numeric_limits<int>::min(), hi = std::numeric_limits<int>::max();
+    int overflow = 0;  // the sign of n when it does not fit a long long
+    const long long v = PyLong_AsLongLongAndOverflow(index.ptr(), &overflow);
+    if (overflow != 0)
+        return overflow > 0 ? hi : lo;
+    return static_cast<long>(std::clamp<long long>(v, lo, hi));
+}
 
 template <class T>
 void add_math_functions(py::module_& m)
@@ -117,6 +153,37 @@ void add_math_functions(py::module_& m)
     m.def("cbrt", [](const T& d) { return T(xad::cbrt(d)); }, "cubic root");
     m.def("erf", [](const T& d) { return T(xad::erf(d)); }, "error function");
     m.def("erfc", [](const T& d) { return T(xad::erfc(d)); }, "complementary error function");
+    m.def("gamma", [](const T& d) { return T(xad::tgamma(d)); }, "gamma function");
+    m.def(
+        "lgamma", [](const T& d) { return T(xad::lgamma(d)); },
+        "natural logarithm of the absolute value of the gamma function");
+    m.def(
+        "digamma", [](const T& d) { return T(xad::digamma(d)); },
+        "digamma function, the derivative of lgamma");
+    m.def(
+        "rint", [](const T& d) { return T(xad::rint(d)); },
+        "rounds to the nearest integer in the current rounding mode");
+    m.def(
+        "nearbyint", [](const T& d) { return T(xad::nearbyint(d)); },
+        "rounds to the nearest integer in the current rounding mode");
+    m.def("logb", [](const T& d) { return T(xad::logb(d)); }, "binary exponent of the argument");
+    m.def(
+        "lrint", [](const T& d) { return round_to_int64(d); },
+        round_to_int64_doc);
+    m.def(
+        "llrint", [](const T& d) { return round_to_int64(d); },
+        round_to_int64_doc);
+    m.def(
+        "fdim", [](const T& d, const T& b) { return T(xad::fdim(d, b)); },
+        "x - y if x > y, else +0; NaN if either operand is NaN");
+    m.def(
+        "scalbln",
+        [](const T& d, const py::object& n)
+        {
+            using std::scalbln;
+            return T(scalbln(d, clamp_exponent(n)));
+        },
+        "multiplies x by 2 to the power of any integer n; saturates to inf or 0");
     m.def(
         "nextafter", [](const T& d, const T& b) { return T(xad::nextafter(d, b)); },
         "next representable value in the given direction");
@@ -199,6 +266,12 @@ void add_math_functions(py::module_& m)
         m.def(
             "remainder", [](const double& d, const T& b) { return T(xad::remainder(d, b)); },
             "signed remainder after integer division");
+        m.def(
+            "fdim", [](const T& d, const double& b) { return T(xad::fdim(d, b)); },
+            "x - y if x > y, else +0; NaN if either operand is NaN");
+        m.def(
+            "fdim", [](const double& d, const T& b) { return T(xad::fdim(d, b)); },
+            "x - y if x > y, else +0; NaN if either operand is NaN");
     }
 };
 
