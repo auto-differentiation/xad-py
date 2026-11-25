@@ -52,6 +52,7 @@ set(XAD_COPY_ELISION OFF)
 set(XAD_SKIP_ZERO_PARTIALS OFF)
 set(XAD_REDUCED_MEMORY OFF)
 set(XAD_OUTLINE_RECORDING OFF)
+set(XAD_ENABLE_GRAPH OFF)
 # AVX only when targeting x86_64
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles(
