@@ -8,11 +8,23 @@ The package version follows the [XAD](https://github.com/auto-differentiation/xa
 C++ core it is built on.
 
 
-## [Unreleased]
+## [2.3.0] - 2026-11-25
 
 ### Added
 
 - `import xad` prints a short license notice to stderr once per Python environment.
+- Sample `samples/black_scholes_greeks.py`: Black-Scholes delta, vega, rho and theta in one
+  adjoint pass, checked against the closed form.
+- `xad.math`: `gamma`, `lgamma`, `digamma`, `rint`, `nearbyint`, `lrint`, `llrint`, `logb`,
+  `scalbln` and `fdim`, from XAD 2.3.0, for active and plain values.
+
+### Changed
+
+- Built on XAD 2.3.0.
+- Package links on PyPI: the homepage is the XAD page, and a new link points to the commercial
+  license page.
+- PyPI classifiers: the package is listed under the AGPL license only (the proprietary license
+  classifier is removed).
 
 
 ## [2.2.0] - 2026-11-12
@@ -94,7 +106,8 @@ Minor fixes to allow linking against QuantLib-Risks without duplicate symbols.
 Initial release of Python bindings for XAD.
 
 
-[Unreleased]: https://github.com/auto-differentiation/xad-py/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/auto-differentiation/xad-py/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/auto-differentiation/xad-py/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/auto-differentiation/xad-py/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/auto-differentiation/xad-py/compare/v1.5.2...v2.1.0
 [1.5.2]: https://github.com/auto-differentiation/xad-py/compare/v1.5.1.1...v1.5.2
